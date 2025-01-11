@@ -1,14 +1,37 @@
-import {
-  CoreMessage,
-  CoreToolMessage,
-  generateId,
-  Message,
-  ToolInvocation,
-} from "ai";
+import { type Message, type CreateMessage } from "ai";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
-import { Chat } from "@/db/schema";
+// Definindo interfaces atualizadas para o Next.js 15
+interface ToolInvocation {
+  state: "call" | "result";
+  toolCallId: string;
+  toolName: string;
+  args: Record<string, unknown>;
+  result?: string;
+}
+
+interface ExtendedMessage extends Message {
+  toolInvocations?: ToolInvocation[];
+}
+
+// Definindo nossa própria interface CoreMessage sem estender CreateMessage
+interface CoreMessage {
+  id?: string;
+  role: "user" | "assistant" | "system" | "tool";
+  content: string | Array<{
+    type: string;
+    text?: string;
+    toolCallId?: string;
+    toolName?: string;
+    args?: Record<string, unknown>;
+  }>;
+}
+
+// Implementação própria do generateId
+function generateId() {
+  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -55,23 +78,24 @@ function addToolMessageToChat({
   toolMessage,
   messages,
 }: {
-  toolMessage: CoreToolMessage;
-  messages: Array<Message>;
-}): Array<Message> {
+  toolMessage: CoreMessage;
+  messages: Array<ExtendedMessage>;
+}): Array<ExtendedMessage> {
   return messages.map((message) => {
     if (message.toolInvocations) {
       return {
         ...message,
         toolInvocations: message.toolInvocations.map((toolInvocation) => {
-          const toolResult = toolMessage.content.find(
-            (tool) => tool.toolCallId === toolInvocation.toolCallId,
-          );
+          const toolResult = Array.isArray(toolMessage.content) && 
+            toolMessage.content.find(
+              (tool) => tool.toolCallId === toolInvocation.toolCallId
+            );
 
           if (toolResult) {
             return {
               ...toolInvocation,
               state: "result",
-              result: toolResult.result,
+              result: typeof toolResult === 'string' ? toolResult : toolResult.text,
             };
           }
 
@@ -86,11 +110,11 @@ function addToolMessageToChat({
 
 export function convertToUIMessages(
   messages: Array<CoreMessage>,
-): Array<Message> {
-  return messages.reduce((chatMessages: Array<Message>, message) => {
+): Array<ExtendedMessage> {
+  return messages.reduce((chatMessages: Array<ExtendedMessage>, message) => {
     if (message.role === "tool") {
       return addToolMessageToChat({
-        toolMessage: message as CoreToolMessage,
+        toolMessage: message,
         messages: chatMessages,
       });
     }
@@ -102,14 +126,14 @@ export function convertToUIMessages(
       textContent = message.content;
     } else if (Array.isArray(message.content)) {
       for (const content of message.content) {
-        if (content.type === "text") {
+        if (content.type === "text" && content.text) {
           textContent += content.text;
-        } else if (content.type === "tool-call") {
+        } else if (content.type === "tool-call" && content.toolCallId && content.toolName) {
           toolInvocations.push({
             state: "call",
             toolCallId: content.toolCallId,
             toolName: content.toolName,
-            args: content.args,
+            args: content.args || {},
           });
         }
       }
@@ -126,8 +150,13 @@ export function convertToUIMessages(
   }, []);
 }
 
+// Atualizando a interface Chat para typescript
+interface Chat {
+  messages: Array<CoreMessage>;
+}
+
 export function getTitleFromChat(chat: Chat) {
-  const messages = convertToUIMessages(chat.messages as Array<CoreMessage>);
+  const messages = convertToUIMessages(chat.messages);
   const firstMessage = messages[0];
 
   if (!firstMessage) {
