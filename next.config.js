@@ -6,6 +6,17 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: "2mb",
     },
+    // Otimizações de cache
+    typedRoutes: true,
+    // Otimização de compilação
+    turbo: {
+      rules: {
+        // Otimiza regras de build
+        "**/*": {
+          loaders: ["@next/font/google", "next-image-loader"],
+        },
+      },
+    },
   },
   logging: {
     fetches: {
@@ -21,6 +32,18 @@ const nextConfig = {
         hostname: "**",
       },
     ],
+  },
+  // Configuração de paths
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "@": ".",
+      "@components": "./src/components",
+      "@lib": "./src/lib",
+      "@hooks": "./src/hooks",
+      "@utils": "./src/utils",
+    };
+    return config;
   },
 };
 

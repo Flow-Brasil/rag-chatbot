@@ -1,29 +1,15 @@
 import { StreamingTextResponse } from "ai";
 import { createGroqModel } from "@/ai";
 import { createGeminiModel } from "@/ai/gemini";
+import { RagieClient } from "@/lib/api/ragie";
 
 const SYSTEM_PROMPT = `Você é um assistente prestativo e amigável. Suas respostas devem ser claras, precisas e em português do Brasil. Mantenha um tom profissional mas acolhedor.`;
 
-async function getContextFromRagie(query: string) {
-  try {
-    const response = await fetch("https://ragie.fly.dev/api/context", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query }),
-    });
-
-    if (!response.ok) {
-      console.warn("Falha ao buscar dados da API Ragie:", response.status, response.statusText);
-      return [];
-    }
-
-    const data = await response.json();
-    return data.chunks || [];
-  } catch (error) {
-    console.warn("Falha ao buscar dados da API Ragie:", error);
-    return [];
-  }
-}
+// Initialize Ragie client
+const ragieClient = new RagieClient({
+  apiKey: process.env.RAGIE_API_KEY!,
+  baseUrl: 'https://api.ragie.ai'
+});
 
 interface RequestData {
   messages: any[];
@@ -42,27 +28,15 @@ export async function POST(req: Request) {
     const lastMessage = messages[messages.length - 1];
 
     // Busca contexto relevante da Ragie API
-    const context = await fetch("https://api.ragie.ai/retrievals", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.RAGIE_API_KEY}`
-      },
-      body: JSON.stringify({
-        query: lastMessage.content,
-        rerank: true,
-        filter: documentId ? { document_id: documentId } : undefined
-      })
-    }).then(res => res.json())
-    .then(data => data.scored_chunks || [])
-    .catch(error => {
-      console.error("Falha ao buscar dados da API Ragie:", error);
-      return [];
+    const { scored_chunks: context } = await ragieClient.getContext({
+      query: lastMessage.content,
+      rerank: true,
+      filter: documentId ? { document_id: documentId } : undefined
     });
 
     // Formata o contexto para o prompt
     const contextText = context.length > 0
-      ? "\n\nContexto relevante:\n" + context.map((chunk: any) => chunk.text).join("\n")
+      ? "\n\nContexto relevante:\n" + context.map(chunk => chunk.text).join("\n")
       : "";
 
     // Prepara o prompt com o contexto
