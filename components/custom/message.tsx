@@ -2,7 +2,9 @@
 
 import { Message as AIMessage } from "ai";
 import ReactMarkdown from "react-markdown";
-import { ModelType } from "@/hooks/useModelSelection";
+import { cn } from "@/lib/utils";
+
+type ModelType = 'groq' | 'gemini';
 
 interface MessageProps extends Omit<AIMessage, 'model'> {
   model?: ModelType;
@@ -10,20 +12,36 @@ interface MessageProps extends Omit<AIMessage, 'model'> {
 }
 
 export function Message({ role, content, model, id }: MessageProps) {
+  const isDocsCommand = role === "assistant" && content.includes("📚 **Documentos");
+
   return (
-    <div key={id} className={`flex flex-col ${role === "user" ? "items-end" : ""} gap-2`}>
-      <div className={`rounded-lg p-3 max-w-md ${
-        role === "user" ? "bg-red-500 text-white" : "bg-gray-100"
-      }`}>
-        <div className="prose dark:prose-invert max-w-none">
-          <ReactMarkdown>{content || ''}</ReactMarkdown>
+    <div
+      className={cn(
+        "flex flex-col gap-2 p-4 whitespace-pre-wrap",
+        role === "user" ? "bg-gray-100" : "bg-white",
+        isDocsCommand && "bg-blue-50 font-mono text-sm"
+      )}
+      key={id}
+    >
+      <ReactMarkdown
+        components={{
+          pre: ({ node, ...props }) => (
+            <div className="overflow-auto w-full my-2 bg-black/80 p-4 rounded-lg">
+              <pre {...props} />
+            </div>
+          ),
+          code: ({ node, ...props }) => (
+            <code className="bg-black/80 p-1 rounded" {...props} />
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+      {role === "assistant" && model && (
+        <div className="text-xs text-gray-500 mt-2">
+          Modelo: {model}
         </div>
-        {role === "assistant" && model && (
-          <div className="text-xs text-right mt-1 opacity-70">
-            {model}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

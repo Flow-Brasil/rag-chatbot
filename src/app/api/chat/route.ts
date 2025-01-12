@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
+import { StreamingTextResponse } from 'ai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { searchDocuments, listDocuments } from '../ragie';
 
-const RAGIE_API_KEY = process.env.RAGIE_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 interface Message {
   role: string;
@@ -15,31 +18,6 @@ interface RequestData {
   };
 }
 
-async function searchRagie(query: string, filter?: { scope?: string, documentId?: string }) {
-  const response = await fetch('https://api.ragie.ai/retrievals', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${RAGIE_API_KEY}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    },
-    body: JSON.stringify({
-      query,
-      rerank: true,
-      filter: {
-        ...(filter?.scope && { scope: filter.scope }),
-        ...(filter?.documentId && { document_id: filter.documentId })
-      }
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error(`Erro na busca: ${response.statusText}`);
-  }
-
-  return response.json();
-}
-
 export async function POST(req: Request) {
   try {
     const requestData: RequestData = await req.json();
@@ -49,43 +27,14 @@ export async function POST(req: Request) {
     // Processamento dos comandos Ragie
     let contextText = "";
     
-    if (lastMessage.content.includes("@apirag")) {
-      try {
-        const query = lastMessage.content.replace("@apirag", "").trim();
-        const response = await searchRagie(query, { scope: "api-docs" });
-        
-        contextText = "\n\n📚 **Informações da API Ragie**\n\n" + 
-          response.scored_chunks
-            .map((chunk: any) => `### Trecho (Score: ${chunk.score.toFixed(2)})\n${chunk.text}`)
-            .join("\n\n");
-            
-      } catch (error: any) {
-        throw new Error(`Erro ao acessar API Ragie: ${error.message}`);
-      }
-    } 
-    else if (lastMessage.content.includes("@ragdoc")) {
-      try {
-        const query = lastMessage.content.replace("@ragdoc", "").trim();
-        const response = await searchRagie(query, { scope: "documents" });
-        
-        contextText = "\n\n🔍 **Documentos Encontrados**\n\n" + 
-          response.scored_chunks
-            .map((chunk: any) => `### ${chunk.document_name || 'Documento'} (Score: ${chunk.score.toFixed(2)})\n${chunk.text}`)
-            .join("\n\n");
-            
-      } catch (error: any) {
-        throw new Error(`Erro ao buscar documentos: ${error.message}`);
-      }
-    }
-    else if (lastMessage.content.trim() === "/docs") {
+    if (lastMessage.content.trim() === "/docs") {
       try {
         const response = await fetch('https://api.ragie.ai/documents', {
-          headers: {
-            'Authorization': `Bearer ${RAGIE_API_KEY}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
           method: 'GET',
+          headers: {
+            'Authorization': `Bearer tnt_46Qnib7kZaD_Ifcd9HQUauLIooSdXSRwIvfvMU04gsKhlbHxPg51YvA`,
+            'Content-Type': 'application/json',
+          }
         });
 
         if (!response.ok) {
@@ -93,38 +42,18 @@ export async function POST(req: Request) {
         }
 
         const data = await response.json();
-        
-        if (!data.documents || data.documents.length === 0) {
-          contextText = "\n\nℹ️ **Nenhum documento encontrado**\n\nUse o botão de upload para adicionar documentos.";
-        } else {
-          const documentList = data.documents
-            .map((doc: any) => {
-              const status = {
-                'pending': '⏳ Aguardando',
-                'partitioning': '📄 Dividindo',
-                'partitioned': '✂️ Dividido',
-                'refined': '🔍 Refinado',
-                'chunked': '📝 Em chunks',
-                'indexed': '📑 Indexado',
-                'summary_indexed': '📋 Sumário pronto',
-                'ready': '✅ Pronto',
-                'failed': '❌ Falhou'
-              }[doc.status] || doc.status;
-
-              return `### ${doc.name}\n- ID: \`${doc.id}\`\n- Status: ${status}\n- Chunks: ${doc.chunk_count || 'N/A'}\n- Escopo: ${doc.metadata?.scope || 'N/A'}`;
-            })
-            .join("\n\n");
-
-          contextText = `\n\n📚 **Documentos Disponíveis**\n\n${documentList}`;
-        }
+        return new Response(JSON.stringify(data), {
+          headers: { 'Content-Type': 'application/json' }
+        });
       } catch (error: any) {
         throw new Error(`Erro ao listar documentos: ${error.message}`);
       }
     }
-    else if (data?.documentId) {
+    else {
       try {
-        const response = await searchRagie(lastMessage.content, { documentId: data.documentId });
-        contextText = "\n\n📄 **Contexto do Documento**\n\n" + 
+        const response = await searchDocuments(lastMessage.content, data?.documentId);
+        
+        contextText = "\n\n🔍 **Resultados da Busca**\n\n" + 
           response.scored_chunks
             .map((chunk: any) => chunk.text)
             .join("\n\n");
@@ -138,8 +67,6 @@ export async function POST(req: Request) {
 Suas respostas devem ser claras, precisas e em português do Brasil.
 
 Comandos especiais disponíveis:
-- @apirag [pergunta]: Busca informações sobre a API Ragie
-- @ragdoc [pergunta]: Busca em documentos específicos
 - /docs: Lista todos os documentos disponíveis
 
 Ao responder consultas:
@@ -151,14 +78,93 @@ Ao responder consultas:
 ${contextText}`;
 
     // Prepara a mensagem para o modelo
-    const modelMessages = [
-      { role: "system", content: systemPrompt },
-      ...messages
-    ];
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY || '');
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    const chat = model.startChat({
+      history: messages.map(msg => ({
+        role: msg.role as 'user' | 'model',
+        parts: [{ text: msg.content }]
+      })),
+      generationConfig: {
+        maxOutputTokens: 2000,
+        temperature: 0.7
+      }
+    });
 
-    // Retorna a resposta
-    return NextResponse.json({ messages: modelMessages });
-    
+    const result = await chat.sendMessage(systemPrompt);
+    const response = await result.response;
+    const text = response.text();
+
+    // Retorna a resposta como stream
+    return new StreamingTextResponse(new ReadableStream({
+      start(controller) {
+        controller.enqueue(text);
+        controller.close();
+      }
+    }));
+
+  } catch (error: any) {
+    console.error('Erro no processamento:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Erro interno do servidor' }),
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  }
+}
+
+export async function json(req: Request) {
+  try {
+    const { messages } = await req.json();
+    const lastMessage = messages[messages.length - 1];
+
+    if (lastMessage.content === '/docs') {
+      let contextText = '';
+      try {
+        const response = await listDocuments();
+        
+        if (!response.documents || response.documents.length === 0) {
+          contextText = "📚 **Nenhum documento encontrado**\n\n" +
+            "Para adicionar documentos, use a rota POST https://api.ragie.ai/documents\n" +
+            "Consulte a documentação para mais detalhes sobre upload de arquivos.";
+        } else {
+          contextText = "📚 **Documentos Disponíveis**\n\n" +
+            response.documents.map(doc => (
+              `### ${doc.name}\n` +
+              `- ID: \`${doc.id}\`\n` +
+              `- Status: ${doc.status === 'ready' ? '✅' : '⏳'} ${doc.status}\n` +
+              `- Chunks: ${doc.chunk_count}\n` +
+              `- Escopo: ${doc.metadata.scope || 'default'}\n`
+            )).join('\n') +
+            "\n\n> Para buscar em um documento específico, inclua o ID do documento na sua pergunta.";
+        }
+
+        return new StreamingTextResponse(new ReadableStream({
+          start(controller) {
+            controller.enqueue(contextText);
+            controller.close();
+          }
+        }));
+      } catch (error) {
+        console.error('Erro ao listar documentos:', error);
+        return new Response(
+          JSON.stringify({ error: 'Erro ao listar documentos' }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    const searchResults = await searchDocuments(lastMessage.content);
+    const content = searchResults.scored_chunks
+      .map(chunk => chunk.text)
+      .join('\n\n');
+
+    return new Response(JSON.stringify({ content }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+
   } catch (error: any) {
     console.error('Erro no processamento:', error);
     return NextResponse.json(

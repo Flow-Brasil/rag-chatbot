@@ -38,6 +38,37 @@ export function useCustomChat({ initialMessages = [], id }: UseCustomChatProps =
 
       try {
         const modelOptions = getModelOptions();
+        
+        // Adiciona tratamento especial para comandos
+        if (input.startsWith('/')) {
+          const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              messages: [...messages, { role: 'user', content: input }],
+              ...modelOptions
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error('Erro ao processar comando');
+          }
+
+          const data = await response.json();
+          
+          // Atualiza as mensagens com a resposta do comando
+          setMessages([
+            ...messages,
+            { role: 'user', content: input, id: `user-${Date.now()}` },
+            { role: 'assistant', content: data.content, id: `assistant-${Date.now()}` }
+          ]);
+          setInput('');
+          return;
+        }
+
+        // Processa mensagens normais
         await chatSubmit(e, {
           data: modelOptions
         });
@@ -46,7 +77,7 @@ export function useCustomChat({ initialMessages = [], id }: UseCustomChatProps =
         toast.error("Erro ao enviar mensagem. Por favor, tente novamente.");
       }
     },
-    [chatSubmit, input, getModelOptions]
+    [chatSubmit, input, messages, getModelOptions, setMessages, setInput]
   );
 
   return {

@@ -34,6 +34,26 @@ export function Chat({ id, initialMessages = [] }: ChatProps) {
     scrollToBottom();
   }, [messages]);
 
+  const handleRestore = () => {
+    // Limpa as mensagens
+    setMessages([]);
+    // Limpa o input
+    setInput("");
+    // Limpa o histórico do localStorage
+    if (id) {
+      const history = localStorage.getItem("chatHistory");
+      if (history) {
+        try {
+          const parsedHistory = JSON.parse(history);
+          delete parsedHistory[id];
+          localStorage.setItem("chatHistory", JSON.stringify(parsedHistory));
+        } catch (error) {
+          console.error("Erro ao limpar histórico:", error);
+        }
+      }
+    }
+  };
+
   return (
     <div className="flex h-screen flex-col">
       <div className="flex-1 overflow-y-auto p-4">
@@ -56,6 +76,7 @@ export function Chat({ id, initialMessages = [] }: ChatProps) {
         isLoading={isLoading}
         messages={messages}
         setMessages={setMessages}
+        onRestore={handleRestore}
       />
     </div>
   );

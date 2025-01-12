@@ -1,8 +1,7 @@
 "use client";
 
-import { ChevronDown, SendHorizontal, Search, FileSearch, Code, Bot, Database } from "lucide-react";
+import { SendHorizontal } from "lucide-react";
 import { Button } from "@nextui-org/react";
-import { useState } from "react";
 
 interface Props {
   input: string;
@@ -12,8 +11,6 @@ interface Props {
 }
 
 export function MultimodalInput({ input, setInput, handleSubmit, isLoading }: Props) {
-  const [showToolbar, setShowToolbar] = useState(true);
-
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -22,70 +19,10 @@ export function MultimodalInput({ input, setInput, handleSubmit, isLoading }: Pr
     }
   };
 
-  const handleToolCommand = (command: string) => {
-    setInput(input + " " + command);
-  };
-
   return (
     <div className="absolute bottom-0 left-0 right-0 bg-background">
-      {/* Barra de ferramentas */}
-      <div className={`border-t border-b transition-all duration-300 ${showToolbar ? 'h-14 opacity-100' : 'h-0 opacity-0 overflow-hidden'}`}>
-        <div className="flex items-center gap-2 px-4 py-2">
-          <Button
-            isIconOnly
-            variant="light"
-            onClick={() => handleToolCommand("@apirag")}
-            className="text-default-600 hover:text-primary"
-          >
-            <Code size={20} />
-          </Button>
-          <Button
-            isIconOnly
-            variant="light"
-            onClick={() => handleToolCommand("@ragdoc")}
-            className="text-default-600 hover:text-primary"
-          >
-            <FileSearch size={20} />
-          </Button>
-          <Button
-            isIconOnly
-            variant="light"
-            onClick={() => handleToolCommand("/search")}
-            className="text-default-600 hover:text-primary"
-          >
-            <Search size={20} />
-          </Button>
-          <Button
-            isIconOnly
-            variant="light"
-            onClick={() => handleToolCommand("/bot")}
-            className="text-default-600 hover:text-primary"
-          >
-            <Bot size={20} />
-          </Button>
-          <Button
-            isIconOnly
-            variant="light"
-            onClick={() => handleToolCommand("/db")}
-            className="text-default-600 hover:text-primary"
-          >
-            <Database size={20} />
-          </Button>
-        </div>
-      </div>
-
-      {/* Campo de entrada e botões */}
       <div className="p-4 border-t">
         <form onSubmit={handleSubmit} className="flex items-center gap-2">
-          <Button
-            isIconOnly
-            variant="light"
-            onClick={() => setShowToolbar(!showToolbar)}
-            className="rounded-full"
-          >
-            <ChevronDown className={`transition-transform ${!showToolbar ? 'rotate-180' : ''}`} />
-          </Button>
-
           <input
             type="text"
             value={input}

@@ -1,83 +1,146 @@
-import { RagieConfig, RagieRequestOptions, RagieResponse, RagieError } from '../types/ragie';
+interface RagieConfig {
+  apiKey: string;
+  baseUrl: string;
+}
+
+interface RagieDocument {
+  id: string;
+  name: string;
+  status: string;
+  chunk_count?: number;
+  metadata?: {
+    scope?: string;
+    [key: string]: any;
+  };
+}
+
+interface RagieChunk {
+  text: string;
+  score: number;
+  document_name?: string;
+  document_id?: string;
+}
+
+interface RagieResponse {
+  scored_chunks: RagieChunk[];
+}
 
 export class RagieClient {
-  private config: RagieConfig;
-  private retryDelay = 1000;
+  private apiKey: string;
+  private baseUrl: string;
 
   constructor(config: RagieConfig) {
-    this.config = {
-      maxRetries: 3,
-      timeout: 10000,
-      ...config
+    this.apiKey = config.apiKey;
+    this.baseUrl = config.baseUrl;
+  }
+
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      ...options,
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        ...options.headers,
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(`Ragie API error: ${error.detail || response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async listDocuments(): Promise<{ documents: RagieDocument[] }> {
+    return this.request('/documents');
+  }
+
+  async getDocument(documentId: string): Promise<RagieDocument> {
+    return this.request(`/documents/${documentId}`);
+  }
+
+  async getContext(params: {
+    query: string;
+    rerank?: boolean;
+    filter?: {
+      scope?: string;
+      document_id?: string;
     };
+  }): Promise<RagieResponse> {
+    return this.request('/retrievals', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: params.query,
+        rerank: params.rerank ?? true,
+        filter: params.filter,
+      }),
+    });
   }
 
-  private async fetchWithRetry(
-    url: string,
-    options: RequestInit,
-    retries = this.config.maxRetries
-  ): Promise<Response> {
-    try {
-      const response = await fetch(url, {
-        ...options,
-        signal: AbortSignal.timeout(this.config.timeout!),
-      });
+  async uploadDocument(file: File, metadata: { scope: string }): Promise<RagieDocument> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('metadata', JSON.stringify(metadata));
+    formData.append('mode', 'fast');
 
-      if (!response.ok) {
-        const error = await response.json() as RagieError;
-        throw new Error(`Ragie API error: ${error.message || response.statusText}`);
-      }
+    const response = await fetch(`${this.baseUrl}/documents`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+      },
+      body: formData,
+    });
 
-      return response;
-    } catch (error) {
-      if (retries > 0 && error instanceof Error && error.name === 'TimeoutError') {
-        await new Promise(resolve => setTimeout(resolve, this.retryDelay));
-        return this.fetchWithRetry(url, options, retries - 1);
-      }
-      throw error;
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(`Ragie API error: ${error.detail || response.statusText}`);
     }
+
+    return response.json();
   }
 
-  async getContext(options: RagieRequestOptions): Promise<RagieResponse> {
-    try {
-      const response = await this.fetchWithRetry(
-        `${this.config.baseUrl}/retrievals`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.config.apiKey}`
-          },
-          body: JSON.stringify(options)
-        }
-      );
-
-      const data = await response.json();
-      return data as RagieResponse;
-    } catch (error) {
-      console.error('Error fetching context from Ragie:', error);
-      return { scored_chunks: [] };
+  formatDocumentList(documents: RagieDocument[]): string {
+    if (!documents || documents.length === 0) {
+      return "# 📚 Documentos\n\nℹ️ **Nenhum documento encontrado**\n\nUse o botão de upload para adicionar documentos.";
     }
-  }
 
-  async uploadDocument(content: string, metadata?: Record<string, any>) {
-    try {
-      const response = await this.fetchWithRetry(
-        `${this.config.baseUrl}/documents/raw`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.config.apiKey}`
-          },
-          body: JSON.stringify({ content, metadata })
-        }
-      );
+    const statusMap: Record<string, string> = {
+      'pending': '⏳ Aguardando',
+      'partitioning': '📄 Dividindo',
+      'partitioned': '✂️ Dividido',
+      'refined': '🔍 Refinado',
+      'chunked': '📝 Em chunks',
+      'indexed': '📑 Indexado',
+      'summary_indexed': '📋 Sumário pronto',
+      'ready': '✅ Pronto',
+      'failed': '❌ Falhou'
+    };
 
-      return await response.json();
-    } catch (error) {
-      console.error('Error uploading document to Ragie:', error);
-      throw error;
-    }
+    const sections = documents.map(doc => {
+      const status = statusMap[doc.status] || doc.status;
+      return [
+        `### ${doc.name}`,
+        `- **ID**: \`${doc.id}\``,
+        `- **Status**: ${status}`,
+        doc.chunk_count ? `- **Chunks**: ${doc.chunk_count}` : null,
+        `- **Escopo**: ${doc.metadata?.scope || 'N/A'}`,
+        '',
+        doc.status === 'ready' ? '> ✨ Este documento está pronto para consulta!' : 
+        doc.status === 'indexed' ? '> 🔍 Este documento já pode ser consultado.' :
+        doc.status === 'failed' ? '> ❌ Houve um erro no processamento deste documento.' :
+        '> 🔄 Este documento ainda está sendo processado.',
+        ''
+      ].filter(Boolean).join('\n');
+    });
+
+    return [
+      '# 📚 Documentos Disponíveis',
+      '',
+      '> Use o botão de upload para adicionar novos documentos.',
+      '',
+      ...sections
+    ].join('\n');
   }
 } 

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../../components/ui/dialog";
 import { FileIcon } from "./icons";
 
 const ALLOWED_TYPES = [
@@ -178,7 +178,17 @@ export function DocumentUpload({ onStatusUpdate }: Props) {
               placeholder="Nome do arquivo"
             />
           </div>
-          <div className="border-2 border-dashed rounded-lg p-6 text-center">
+          <div className="border-2 border-dashed rounded-lg p-6">
+            <div className="text-center mb-4">
+              <h3 className="text-sm font-medium mb-2">Tipos de Arquivo Suportados</h3>
+              <div className="flex flex-wrap gap-2 justify-center">
+                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">JSON</span>
+                <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs">PDF</span>
+                <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs">DOCX</span>
+                <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs">TXT</span>
+                <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs">MD</span>
+              </div>
+            </div>
             <input
               type="file"
               accept=".pdf,.docx,.txt,.json,.md"
@@ -193,17 +203,30 @@ export function DocumentUpload({ onStatusUpdate }: Props) {
             />
             <label
               htmlFor="file-upload"
-              className="cursor-pointer text-blue-500 hover:text-blue-600"
+              className="cursor-pointer flex flex-col items-center text-blue-500 hover:text-blue-600"
             >
               {isUploading ? (
                 "Enviando..."
               ) : (
                 <>
-                  {selectedFile ? selectedFile.name : "Clique para selecionar ou arraste um arquivo"}
-                  <br />
-                  <span className="text-sm text-gray-500">
-                    PDF, DOCX, TXT, JSON, MD
-                  </span>
+                  {selectedFile ? (
+                    <div className="text-center">
+                      <p className="font-medium">{selectedFile.name}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {(selectedFile.size / 1024).toFixed(2)} KB
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="p-4 bg-blue-50 rounded-full mb-2">
+                        <FileIcon size={24} />
+                      </div>
+                      <p>Clique para selecionar ou arraste um arquivo</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Arquivos JSON terão prioridade na indexação
+                      </p>
+                    </>
+                  )}
                 </>
               )}
             </label>

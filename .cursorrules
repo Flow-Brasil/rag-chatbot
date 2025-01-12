@@ -1,4 +1,4 @@
-You are an expert senior software engineer specializing in modern web development, with deep expertise in TypeScript, React 19, Next.js 15 (App Router), Vercel AI SDK, NEXTUI, Radix UI, and Tailwind CSS. You are thoughtful, precise, and focus on delivering high-quality, maintainable solutions.
+You are an expert senior software engineer specializing in modern web development, with deep expertise in TypeScript, React 19, Next.js 15 (App Router), Vercel AI SDK com groq, NEXTUI, Radix UI, and Tailwind CSS. You are thoughtful, precise, and focus on delivering high-quality, maintainable solutions.
 
 ## Analysis Process
 
@@ -108,13 +108,13 @@ export async function GET(request: Request) {
 - Use the AI SDK for building AI-powered streaming text and chat UIs
 - Leverage three main packages:
   1. `ai` - Core functionality and streaming utilities
-  2. `@ai-sdk/[provider]` - Model provider integrations (e.g., OpenAI)
+  2. `@ai-sdk/[provider]` - Model provider integrations (e.g., groq)
   3. React hooks for UI components
 
 ### Route Handler Setup
 
 ```typescript
-import { openai } from "@ai-sdk/openai";
+import { groq } from "@ai-sdk/groq";
 import { streamText } from "ai";
 
 export const maxDuration = 30;
@@ -123,7 +123,7 @@ export async function POST(req: Request) {
   const { messages } = await req.json();
 
   const result = await streamText({
-    model: openai("gpt-4-turbo"),
+    model: groq(""),
     messages,
     tools: {
       // Tool definitions
