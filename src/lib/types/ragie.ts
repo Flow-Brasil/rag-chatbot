@@ -35,11 +35,10 @@ export interface CompletionResult {
 export interface RagieDocument {
   id: string;
   name: string;
-  content: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
+  status: string;
   createdAt: string;
   updatedAt: string;
-  status: DocumentStatus;
 }
 
 export interface RagieRetrievalRequest {
@@ -77,9 +76,7 @@ export interface RagieGenerateResponse {
 export interface ScoredChunk {
   content: string;
   score: number;
-  metadata?: {
-    [key: string]: any;
-  };
+  metadata?: Record<string, unknown>;
 }
 
 export interface RetrievalResponse {
@@ -102,4 +99,14 @@ export interface UploadResponse {
 export interface RagieError {
   detail: string;
   status: number;
+}
+
+export interface RagieClient {
+  listDocuments(): Promise<RagieDocument[]>;
+  searchDocuments(query: string, options?: { scope?: string }): Promise<RetrievalResponse>;
+  uploadDocument(file: File, metadata?: Record<string, unknown>): Promise<RagieDocument>;
+  uploadRawDocument(content: string, metadata?: Record<string, unknown>): Promise<RagieDocument>;
+  deleteDocument(id: string): Promise<void>;
+  getDocument(id: string): Promise<RagieDocument>;
+  updateDocumentMetadata(id: string, metadata: Record<string, unknown>): Promise<RagieDocument>;
 } 

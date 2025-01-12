@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createRagieClient } from '@/lib/ragie-client';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import type { RagieClient } from '@/lib/types/ragie';
 
 // Configurações de runtime e cache
 export const runtime = 'edge';
@@ -23,12 +24,103 @@ interface RequestData {
   };
 }
 
+interface ScoredChunk {
+  content: string;
+  score: number;
+  metadata?: Record<string, unknown>;
+}
+
 // Função para validar e retornar chave de API
 function validateApiKey(key: string | undefined, name: string): string {
   if (!key || key.length < 10) {
     throw new Error(`API key ${name} não configurada ou inválida`);
   }
   return key;
+}
+
+// Função para tratar erros da API Ragie
+function handleRagieError(error: unknown): string {
+  if (error instanceof Error) {
+    if (error.message.includes('Failed to fetch')) {
+      return 'Erro de conexão com a API Ragie. Verifique sua conexão com a internet e tente novamente.';
+    }
+    if (error.message.includes('401')) {
+      return 'API key do Ragie inválida ou expirada. Verifique suas configurações.';
+    }
+    if (error.message.includes('429')) {
+      return 'Limite de requisições excedido. Aguarde um momento e tente novamente.';
+    }
+    if (error.message.includes('5')) {
+      return 'Erro interno do servidor Ragie. Tente novamente em alguns instantes.';
+    }
+    return error.message;
+  }
+  return 'Erro desconhecido ao processar solicitação';
+}
+
+// Função para buscar documentos relevantes
+async function searchRelevantDocuments(query: string, client: RagieClient) {
+  try {
+    const results = await client.searchDocuments(query);
+    if (!results.scoredChunks?.length) return null;
+
+    // Filtra apenas os chunks mais relevantes (score > 0.7)
+    const relevantChunks = results.scoredChunks
+      .filter((chunk: ScoredChunk) => chunk.score > 0.7)
+      .slice(0, 3); // Limita a 3 chunks mais relevantes
+
+    if (!relevantChunks.length) return null;
+
+    return relevantChunks.map((chunk: ScoredChunk) => chunk.content).join('\n\n');
+  } catch (error) {
+    console.error('Erro ao buscar documentos:', error);
+    return null;
+  }
+}
+
+// Função para detectar intenção do usuário
+async function detectUserIntent(message: string): Promise<{
+  intent: 'list_docs' | 'upload_help' | 'search' | 'general';
+  scope?: string;
+  query?: string;
+}> {
+  const lowercaseMsg = message.toLowerCase();
+  
+  // Detecta intenção de listar documentos
+  if (lowercaseMsg.includes('documentos disponíveis') || 
+      lowercaseMsg.includes('listar documentos') ||
+      lowercaseMsg.includes('quais documentos') ||
+      lowercaseMsg.includes('mostrar documentos')) {
+    return { intent: 'list_docs' };
+  }
+
+  // Detecta intenção de ajuda com upload
+  if (lowercaseMsg.includes('como fazer upload') || 
+      lowercaseMsg.includes('como enviar') ||
+      lowercaseMsg.includes('subir arquivo') ||
+      lowercaseMsg.includes('enviar documento') ||
+      lowercaseMsg.includes('adicionar arquivo')) {
+    return { intent: 'upload_help' };
+  }
+
+  // Detecta intenção de busca
+  if (lowercaseMsg.includes('procure') || 
+      lowercaseMsg.includes('busque') ||
+      lowercaseMsg.includes('encontre') ||
+      lowercaseMsg.includes('pesquise') ||
+      lowercaseMsg.includes('procurar por') ||
+      lowercaseMsg.includes('buscar')) {
+    return { 
+      intent: 'search',
+      query: message
+    };
+  }
+
+  // Intenção geral - busca semântica
+  return { 
+    intent: 'general',
+    query: message
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -43,117 +135,51 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Se a mensagem começar com '/', é um comando do Ragie
-    if (message.startsWith('/')) {
-      try {
-        const ragieApiKey = validateApiKey(process.env['NEXT_PUBLIC_RAGIE_API_KEY'], 'Ragie');
-        const client = createRagieClient(ragieApiKey);
-
-        // Processa o comando diretamente aqui em vez de enviar para o modelo
-        if (message === '/docs') {
-          const documents = await client.listDocuments();
-          return NextResponse.json({
-            response: documents.length > 0
-              ? `Documentos disponíveis:\n\n${documents.map(doc => 
-                  `- ${doc.metadata['scope'] || 'Sem escopo'} (${doc.id})`
-                ).join('\n')}`
-              : 'Nenhum documento encontrado.'
-          });
-        }
-
-        if (message === '/upload') {
-          return NextResponse.json({
-            response: `Para fazer upload de um documento, você pode:
-
-1. Enviar um arquivo:
-   Anexe um arquivo e use o comando: /upload-file [escopo]
-   Exemplo: /upload-file meu-escopo
-
-2. Enviar conteúdo raw:
-   Use o comando: /upload-raw [escopo] [conteúdo]
-   Exemplo: /upload-raw meu-escopo "Meu conteúdo aqui"
-
-Tipos de arquivo suportados:
-- PDF
-- DOCX
-- TXT
-- JSON
-- MD (Markdown)`
-          });
-        }
-
-        if (message.startsWith('/search')) {
-          const match = message.match(/^\/search\s+([^\s]+)\s+(.+)$/);
-          if (!match) {
-            return NextResponse.json({
-              response: 'Formato inválido. Use: /search [escopo] [consulta]'
-            });
-          }
-
-          const [, scope = '', query = ''] = match;
-          if (!scope || !query) {
-            return NextResponse.json({
-              response: 'Escopo e consulta são obrigatórios'
-            });
-          }
-
-          const results = await client.searchDocuments(query, { scope });
-
-          return NextResponse.json({
-            response: results.scoredChunks?.length
-              ? `Resultados da busca:\n\n${results.scoredChunks.map(chunk => 
-                  `[Score: ${chunk.score}] ${chunk.content}`
-                ).join('\n\n')}`
-              : 'Nenhum resultado encontrado.'
-          });
-        }
-
-        if (message.startsWith('/upload-raw')) {
-          const match = message.match(/^\/upload-raw\s+([^\s]+)\s+(.+)$/);
-          if (!match) {
-            return NextResponse.json({
-              response: 'Formato inválido. Use: /upload-raw [escopo] [conteúdo]'
-            });
-          }
-
-          const [, scope = '', content = ''] = match;
-          if (!scope || !content) {
-            return NextResponse.json({
-              response: 'Escopo e conteúdo são obrigatórios'
-            });
-          }
-
-          await client.uploadRawDocument(content, { scope });
-
-          return NextResponse.json({
-            response: `Documento adicionado com sucesso ao escopo: ${scope}`
-          });
-        }
-
-        return NextResponse.json({
-          response: `Comando não reconhecido. Comandos disponíveis:
-- /docs - Lista todos os documentos
-- /upload - Instruções para upload de documentos
-- /search [escopo] [consulta] - Busca nos documentos
-- /upload-raw [escopo] [conteúdo] - Envia texto como documento`
-        });
-      } catch (error) {
-        console.error('Erro ao processar comando Ragie:', error);
-        return NextResponse.json(
-          { error: error instanceof Error ? error.message : 'Erro ao processar comando' },
-          { status: 500 }
-        );
-      }
-    }
-
-    // Usa o modelo Gemini
     try {
-      const geminiApiKey = validateApiKey(process.env['NEXT_PUBLIC_GEMINI_API_KEY'], 'Gemini');
+      const [geminiApiKey, ragieApiKey] = [
+        validateApiKey(process.env['NEXT_PUBLIC_GEMINI_API_KEY'], 'Gemini'),
+        validateApiKey(process.env['NEXT_PUBLIC_RAGIE_API_KEY'], 'Ragie')
+      ];
+
       const genAI = new GoogleGenerativeAI(geminiApiKey);
       const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      const client = createRagieClient(ragieApiKey);
 
-      // Prompt simples e direto
-      const systemPrompt = "Você é um assistente amigável em português do Brasil. Seja claro e direto nas respostas.";
+      // Detecta intenção do usuário
+      const userIntent = await detectUserIntent(message);
+
+      let relevantDocs = null;
+      let additionalContext = '';
+
+      switch (userIntent.intent) {
+        case 'list_docs':
+          const documents = await client.listDocuments();
+          additionalContext = documents.length > 0
+            ? `Documentos disponíveis:\n${documents.map(doc => 
+                `- ${doc.metadata['scope'] || 'Sem escopo'} (${doc.id})`
+              ).join('\n')}`
+            : 'Não há documentos disponíveis no momento.';
+          break;
+
+        case 'upload_help':
+          additionalContext = `Instruções para upload:
+1. Você pode enviar arquivos PDF, DOCX, TXT, JSON ou MD
+2. Cada documento pode ter um escopo para melhor organização
+3. O conteúdo será processado e indexado automaticamente
+4. Após o upload, o documento ficará disponível para consulta`;
+          break;
+
+        case 'search':
+        case 'general':
+          relevantDocs = await searchRelevantDocuments(userIntent.query || message, client);
+          break;
+      }
+
+      // Prompt aprimorado com contexto
+      const systemPrompt = `Você é um assistente amigável em português do Brasil que ajuda a responder perguntas com base em documentos.
+Seja claro e direto nas respostas. Use as informações disponíveis para dar respostas precisas e úteis.
+${additionalContext ? '\nContexto adicional:\n' + additionalContext : ''}
+${relevantDocs ? '\nInformações relevantes dos documentos:\n' + relevantDocs : ''}`;
       
       // Manter apenas as últimas 3 mensagens para contexto mais limpo
       const relevantMessages = messages.slice(-3);
@@ -168,11 +194,18 @@ Tipos de arquivo suportados:
       const response = await result.response;
       const text = response.text();
 
-      return NextResponse.json({ response: text });
+      // Adiciona nota sobre documentos encontrados
+      const finalResponse = relevantDocs 
+        ? `${text}\n\n_Resposta baseada em documentos encontrados na base de conhecimento._`
+        : text;
+
+      return NextResponse.json({ response: finalResponse });
+
     } catch (error) {
-      console.error('Erro ao gerar resposta com Gemini:', error);
+      console.error('Erro ao gerar resposta:', error);
+      const errorMessage = handleRagieError(error);
       return NextResponse.json(
-        { error: error instanceof Error ? error.message : 'Erro ao gerar resposta' },
+        { error: errorMessage },
         { status: 500 }
       );
     }

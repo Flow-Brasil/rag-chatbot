@@ -68,7 +68,9 @@ export function useCustomChat({ initialMessages = [], id }: UseCustomChatProps =
             { role: 'user', content: input, id: `user-${Date.now()}` } as Message,
             { 
               role: 'assistant', 
-              content: data.content || data.response, 
+              content: data.error 
+                ? `❌ **Erro no comando**\n${data.error}`
+                : data.content || data.response, 
               id: `assistant-${Date.now()}`,
               error: data.error ? true : false
             } as Message
@@ -89,7 +91,9 @@ export function useCustomChat({ initialMessages = [], id }: UseCustomChatProps =
             { role: 'user', content: input, id: `user-${Date.now()}` } as Message,
             { 
               role: 'assistant', 
-              content: error instanceof Error ? error.message : 'Erro ao processar mensagem. Por favor, tente novamente.',
+              content: error instanceof Error 
+                ? `❌ **Erro ao processar mensagem**\n${error.message}`
+                : '❌ **Erro ao processar mensagem**\nPor favor, tente novamente.',
               id: `assistant-${Date.now()}`,
               error: true
             } as Message
@@ -104,7 +108,9 @@ export function useCustomChat({ initialMessages = [], id }: UseCustomChatProps =
           { role: 'user', content: input, id: `user-${Date.now()}` } as Message,
           { 
             role: 'assistant', 
-            content: error instanceof Error ? error.message : 'Erro ao enviar mensagem. Por favor, tente novamente.',
+            content: error instanceof Error 
+              ? `❌ **Erro ao enviar mensagem**\n${error.message}`
+              : '❌ **Erro ao enviar mensagem**\nPor favor, tente novamente.',
             id: `assistant-${Date.now()}`,
             error: true
           } as Message

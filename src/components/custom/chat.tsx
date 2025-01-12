@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Message as AIMessage } from "ai";
-import { Message } from "./message";
+import { type Message } from "@/lib/types/message";
+import { Message as MessageComponent } from "./message";
 import { MultimodalInput } from "./multimodal-input";
 import { useCustomChat } from "@/hooks/useCustomChat";
 import { Loader2 } from "lucide-react";
@@ -10,7 +10,7 @@ import { ErrorMessage } from "./error-message";
 
 interface ChatProps {
   id?: string;
-  initialMessages?: AIMessage[];
+  initialMessages?: Message[];
 }
 
 export function Chat({ id, initialMessages = [] }: ChatProps) {
@@ -24,7 +24,7 @@ export function Chat({ id, initialMessages = [] }: ChatProps) {
     stop,
     setMessages,
     error
-  } = useCustomChat();
+  } = useCustomChat({ id, initialMessages });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [lastError, setLastError] = useState<string | null>(null);
@@ -76,7 +76,7 @@ export function Chat({ id, initialMessages = [] }: ChatProps) {
           </div>
         )}
         {messages.map((message) => (
-          <Message key={message.id} {...message} />
+          <MessageComponent key={message.id} {...message} />
         ))}
         {isLoading && (
           <div className="flex items-center gap-2 text-gray-500">
