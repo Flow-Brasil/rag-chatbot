@@ -1,7 +1,7 @@
 import { Message } from "ai";
 import { useChat as useVercelChat } from "ai/react";
 import { useCallback, useEffect, useState } from "react";
-import { useModelSelection } from "../../hooks/useModelSelection";
+import { useModelSelection } from "./useModelSelection";
 import { toast } from "sonner";
 
 export function useCustomChat() {
@@ -9,48 +9,65 @@ export function useCustomChat() {
     messages,
     input,
     handleInputChange,
-    handleSubmit: originalHandleSubmit,
+    handleSubmit: chatSubmit,
     setInput,
     isLoading,
     stop,
+    setMessages
   } = useVercelChat();
 
-  const {
-    selectedModel,
-    geminiKey,
-    handleModelClick: originalHandleModelClick,
-    getModelOptions
-  } = useModelSelection();
+  const { selectedModel, getModelOptions } = useModelSelection();
 
-  // Função para lidar com a mudança de modelo
-  const handleModelClick = useCallback((model: 'groq' | 'gemini') => {
-    originalHandleModelClick(model);
-    // Limpa o input ao trocar de modelo
-    setInput('');
-  }, [originalHandleModelClick, setInput]);
-
-  // Função para lidar com o envio de mensagens
   const handleSubmit = useCallback(
-    async (e: any) => {
+    async (e: React.FormEvent<Element>) => {
       e.preventDefault();
-      if (!input.trim()) return;
 
-      const modelOptions = getModelOptions();
-      const options = {
-        data: {
-          ...modelOptions,
-          messages: messages // Inclui o histórico de mensagens
-        }
-      };
+      if (!input.trim()) {
+        return;
+      }
 
       try {
-        await originalHandleSubmit(e, options);
+        const modelOptions = getModelOptions();
+        
+        // Adiciona tratamento especial para comandos
+        if (input.startsWith('/')) {
+          const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              messages: [...messages, { role: 'user', content: input }],
+              ...modelOptions
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error('Erro ao processar comando');
+          }
+
+          const data = await response.json();
+          
+          // Atualiza as mensagens com a resposta do comando
+          setMessages([
+            ...messages,
+            { role: 'user', content: input, id: `user-${Date.now()}` },
+            { role: 'assistant', content: data.content, id: `assistant-${Date.now()}` }
+          ]);
+          setInput('');
+          return;
+        }
+
+        // Processa mensagens normais
+        await chatSubmit(e as React.FormEvent<HTMLFormElement>, {
+          data: modelOptions
+        });
       } catch (error) {
-        console.error("Erro ao enviar mensagem:", error);
-        toast.error("Erro ao enviar mensagem. Tente novamente.");
+        console.error("Error sending message:", error);
+        toast.error("Erro ao enviar mensagem. Por favor, tente novamente.");
       }
     },
-    [input, originalHandleSubmit, getModelOptions, messages]
+    [chatSubmit, input, messages, getModelOptions, setMessages, setInput]
   );
 
   return {
@@ -61,7 +78,6 @@ export function useCustomChat() {
     setInput,
     isLoading,
     stop,
-    selectedModel,
-    handleModelClick,
+    setMessages
   };
 } 

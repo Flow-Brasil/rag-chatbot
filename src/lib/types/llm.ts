@@ -29,7 +29,6 @@ export interface LLMModel {
 }
 
 export interface ChatMessage extends Message {
-  timestamp?: number;
   metadata?: Record<string, unknown>;
 }
 

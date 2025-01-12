@@ -2,7 +2,7 @@ import { Message } from "ai";
 import { LLM_CONFIG } from "@/lib/config/constants";
 import { ChatMessage, LLMResponse } from "@/lib/types/llm";
 
-export function formatChatMessage(content: string, role: Message["role"] = "user"): ChatMessage {
+export function formatChatMessage(content: string, role: "user" | "assistant" = "user"): ChatMessage {
   return {
     id: String(Date.now()),
     role,
@@ -12,20 +12,24 @@ export function formatChatMessage(content: string, role: Message["role"] = "user
 }
 
 export function extractModelResponse(response: any): LLMResponse {
-  try {
-    if (response.text) return { text: response.text };
-    if (response.content) return { content: response.content };
-    if (response.choices?.[0]?.message?.content) {
-      return { content: response.choices[0].message.content };
-    }
-    return { error: "Formato de resposta desconhecido" };
-  } catch (error) {
-    return { error: "Erro ao processar resposta do modelo" };
+  if (response?.text) {
+    return { content: response.text };
   }
+
+  if (response?.error) {
+    return { content: `Error: ${response.error}` };
+  }
+
+  if (typeof response === 'string') {
+    return { content: response };
+  }
+
+  return { content: 'No response content available' };
 }
 
-export function getSystemPrompt(key: keyof typeof LLM_CONFIG.systemPrompts = "default"): string {
-  return LLM_CONFIG.systemPrompts[key];
+export function getSystemPrompt(key: string): string {
+  const config = LLM_CONFIG[key as keyof typeof LLM_CONFIG];
+  return config?.systemPrompt || '';
 }
 
 export function sanitizeMessages(messages: Message[]): Message[] {

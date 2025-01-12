@@ -41,37 +41,42 @@ export class RagieService {
   }
 
   // Upload de documento
-  async uploadDocument(file: File, metadata: DocumentMetadata = {}): Promise<RagieDocument> {
+  async uploadDocument(file: File, metadata: Record<string, any> = {}): Promise<RagieDocument> {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('metadata', JSON.stringify(metadata));
-    formData.append('mode', 'fast');
 
-    const response = await this.request<RagieDocument>('/documents', {
+    const response = await this.request<{ id: string; status: DocumentStatus; metadata: Record<string, any>; name: string; createdAt: string; updatedAt: string; }>('/documents/upload', {
       method: 'POST',
       body: formData,
     });
 
     return {
       id: response.id,
+      name: response.name || file.name,
       content: '',
       metadata: response.metadata || {},
-      status: response.status as DocumentStatus
+      status: response.status,
+      createdAt: response.createdAt || new Date().toISOString(),
+      updatedAt: response.updatedAt || new Date().toISOString()
     };
   }
 
   // Upload de conteúdo raw
-  async uploadRawContent(content: string, metadata: DocumentMetadata = {}): Promise<RagieDocument> {
-    const response = await this.request<RagieDocument>('/documents/raw', {
+  async uploadRawContent(content: string, metadata: Record<string, any> = {}): Promise<RagieDocument> {
+    const response = await this.request<{ id: string; status: DocumentStatus; metadata: Record<string, any>; name: string; createdAt: string; updatedAt: string; }>('/documents/upload/raw', {
       method: 'POST',
       body: JSON.stringify({ content, metadata }),
     });
 
     return {
       id: response.id,
+      name: response.name || 'Raw Content',
       content,
       metadata: response.metadata || {},
-      status: response.status as DocumentStatus
+      status: response.status,
+      createdAt: response.createdAt || new Date().toISOString(),
+      updatedAt: response.updatedAt || new Date().toISOString()
     };
   }
 
@@ -83,7 +88,10 @@ export class RagieService {
       id: response.id,
       content: '',
       metadata: response.metadata || {},
-      status: response.status as DocumentStatus
+      status: response.status,
+      name: response.name || '',
+      createdAt: response.createdAt || new Date().toISOString(),
+      updatedAt: response.updatedAt || new Date().toISOString()
     };
   }
 
@@ -95,17 +103,20 @@ export class RagieService {
   }
 
   // Atualizar metadados do documento
-  async updateDocumentMetadata(documentId: string, metadata: DocumentMetadata): Promise<RagieDocument> {
-    const response = await this.request<RagieDocument>(`/documents/${documentId}`, {
-      method: 'PATCH',
+  async updateDocumentMetadata(documentId: string, metadata: Record<string, any>): Promise<RagieDocument> {
+    const response = await this.request<{ id: string; status: DocumentStatus; metadata: Record<string, any>; name: string; createdAt: string; updatedAt: string; }>(`/documents/${documentId}/metadata`, {
+      method: 'PUT',
       body: JSON.stringify({ metadata }),
     });
 
     return {
       id: response.id,
+      name: response.name || '',
       content: '',
       metadata: response.metadata || {},
-      status: response.status as DocumentStatus
+      status: response.status,
+      createdAt: response.createdAt || new Date().toISOString(),
+      updatedAt: response.updatedAt || new Date().toISOString()
     };
   }
 

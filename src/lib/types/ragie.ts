@@ -35,13 +35,11 @@ export interface CompletionResult {
 export interface RagieDocument {
   id: string;
   name: string;
-  metadata: {
-    scope?: string;
-    [key: string]: any;
-  };
-  status: 'processing' | 'ready' | 'failed';
+  content: string;
+  metadata: Record<string, any>;
   createdAt: string;
   updatedAt: string;
+  status: DocumentStatus;
 }
 
 export interface RagieRetrievalRequest {
@@ -99,4 +97,9 @@ export interface UploadResponse {
     scope?: string;
     [key: string]: any;
   };
+}
+
+export interface RagieError {
+  detail: string;
+  status: number;
 } 

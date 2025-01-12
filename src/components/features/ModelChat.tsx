@@ -4,13 +4,18 @@ import { MultimodalInput } from '@/components/custom/multimodal-input';
 import { StreamingMarkdown } from '@/components/custom/streaming-markdown';
 
 export function ModelChat() {
-  const { messages, input, handleInputChange, handleSubmit } = useChat({
+  const { messages, input, handleInputChange, handleSubmit: chatSubmit } = useChat({
     api: '/api/chat',
     body: {
       model: 'groq',
       stream: true
     }
   });
+
+  const handleSubmit = (e: React.FormEvent<Element>) => {
+    e.preventDefault();
+    chatSubmit(e as React.FormEvent<HTMLFormElement>);
+  };
 
   return (
     <Card className="w-full max-w-4xl mx-auto p-4">

@@ -1,6 +1,8 @@
-import { Message } from "ai";
-import { Groq } from "groq-sdk";
+import { Groq } from 'groq-sdk';
+import { Message } from 'ai';
+import { LLMConfig, LLMModel } from '../../../types/llm';
 import { StreamingTextResponse } from "ai";
+import { ChatCompletionMessageParam } from "groq-sdk/resources/chat/completions";
 
 const SYSTEM_PROMPT = `Você é um assistente virtual prestativo e amigável. Por favor, responda sempre em português do Brasil, mantendo um tom profissional mas acolhedor. Seja claro e direto em suas respostas.`;
 
@@ -17,7 +19,7 @@ export function createGroqModel(apiKey: string) {
         const prompt = systemMessage?.content || SYSTEM_PROMPT;
 
         // Filtra e converte as mensagens para o formato do Groq
-        const chatMessages = messages
+        const chatMessages: ChatCompletionMessageParam[] = messages
           .filter((m: Message) => m.role === 'user' || m.role === 'assistant')
           .map((m: Message) => ({
             role: m.role === 'user' ? 'user' : 'assistant',
@@ -32,7 +34,7 @@ export function createGroqModel(apiKey: string) {
         // Cria a requisição para o Groq
         const completion = await groq.chat.completions.create({
           messages: [
-            { role: 'system', content: prompt },
+            { role: 'system', content: prompt } as ChatCompletionMessageParam,
             ...chatMessages,
           ],
           model: 'mixtral-8x7b-32768',
