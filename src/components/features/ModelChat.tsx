@@ -1,216 +1,542 @@
 "use client";
 
-import { useState, FormEvent, useRef, useEffect } from "react";
-import { Card, Spinner, Button, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Pagination } from "@nextui-org/react";
+import { useState, useRef, useEffect } from "react";
 import { useModelChat } from "@/hooks/useModelChat";
-import { ModelType } from "@/lib/types/llm";
-import { MultimodalInput } from './MultimodalInput';
-import { Toolbar } from "./Toolbar";
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { formatTableData, exportTableData } from "@/lib/utils/table";
-import { Download, ArrowUpDown } from "lucide-react";
+import { useRagieCommands } from "@/hooks/useRagieCommands";
+import { createRagieClient } from "@/lib/ragie-client";
+import {
+  Card,
+  CardHeader,
+  CardBody,
+  CardFooter,
+  Button,
+  Input,
+  Textarea,
+  Spinner,
+  Tooltip,
+  Divider,
+  Progress,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Tabs,
+  Tab
+} from "@nextui-org/react";
+import { Send, Trash2, Upload, Search, FileText, X, Info, ExternalLink } from "lucide-react";
 
 interface ModelChatProps {
-  defaultModel?: ModelType;
+  modelType?: string;
 }
 
-export function ModelChat({ 
-  defaultModel = "gemini"
-}: ModelChatProps) {
+const ALLOWED_TYPES = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+  'application/json',
+  'text/markdown',
+  'text/x-markdown',
+  'application/x-markdown'
+];
+
+export function ModelChat({ modelType = 'gemini' }: ModelChatProps) {
   const [input, setInput] = useState("");
-  const [currentModel, setCurrentModel] = useState<ModelType>(defaultModel);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [sortConfig, setSortConfig] = useState<{
-    column?: string;
-    direction: 'asc' | 'desc';
-  }>({ direction: 'desc' });
+  const [scope, setScope] = useState("");
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<any>(null);
+  const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const { messages, isLoading, sendMessage, clearMessages } = useModelChat(modelType);
+  const { processCommand, isProcessing } = useRagieCommands();
+  const [showUpload, setShowUpload] = useState(false);
 
-  // Usar a chave do modelo atual
-  const apiKey = currentModel === 'gemini' 
-    ? process.env.NEXT_PUBLIC_GEMINI_API_KEY 
-    : process.env.NEXT_PUBLIC_GROQ_API_KEY;
-
-  // Verificar se a chave API está disponível
+  // Log de montagem do componente
   useEffect(() => {
-    if (!apiKey) {
-      console.error(`Chave API não encontrada para o modelo ${currentModel}`);
-    }
-  }, [apiKey, currentModel]);
+    console.log('🔨 Componente ModelChat montado');
+    return () => {
+      console.log('🧹 Componente ModelChat desmontado');
+    };
+  }, []);
 
-  const {
-    messages,
-    isLoading,
-    error,
-    sendMessage,
-    clearMessages,
-  } = useModelChat({
-    modelType: currentModel,
-    apiKey: apiKey || '', // Garantir que nunca seja undefined
-    onError: (error) => console.error("Chat Error:", error)
-  });
+  // Carrega a lista de documentos ao montar o componente
+  useEffect(() => {
+    console.log('⚡ Effect de carregamento de documentos iniciado');
+    console.log('📌 Dependências atuais:', { processCommand: !!processCommand, sendMessage: !!sendMessage });
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const loadDocuments = async () => {
+      console.log('🔄 Inicializando chat - carregando documentos...');
+      try {
+        console.log('🎯 Chamando /docs...');
+        const response = await processCommand("/docs");
+        console.log('📝 Resposta do comando /docs:', response);
+        if (response) {
+          console.log('📨 Enviando resposta para o chat...');
+          await sendMessage(response, { role: 'assistant' });
+          console.log('✅ Lista de documentos carregada e exibida');
+        } else {
+          console.log('⚠️ Comando /docs não retornou resposta');
+        }
+      } catch (error) {
+        console.error("❌ Erro ao carregar documentos:", error);
+        toast.error("Erro ao carregar lista de documentos");
+      }
+    };
+
+    loadDocuments();
+
+    return () => {
+      console.log('🔚 Effect de carregamento de documentos finalizado');
+    };
+  }, [processCommand, sendMessage]);
+
+  // Função para extrair documentos das mensagens
+  const extractDocuments = (content: string) => {
+    const lines = content.split('\n');
+    return lines
+      .filter(line => line.includes('(') && line.includes(')'))
+      .map(line => {
+        const match = line.match(/- (.*?) \((.*?)\)/);
+        if (match) {
+          return {
+            name: match[1],
+            id: match[2]
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, isLoading]); // Scroll quando mensagens ou estado de loading mudar
+  const handleDocumentClick = async (docId: string) => {
+    try {
+      console.log('🔍 Verificando documento:', docId);
+      const client = createRagieClient(process.env.NEXT_PUBLIC_RAGIE_API_KEY || '');
+      const doc = await client.getDocument(docId);
+      setSelectedDocument(doc);
+      setIsDocumentModalOpen(true);
+    } catch (error) {
+      console.error('❌ Erro ao carregar detalhes do documento:', error);
+      await sendMessage(`Erro ao carregar detalhes do documento: ${error instanceof Error ? error.message : 'Erro desconhecido'}`, { role: 'assistant' });
+    }
+  };
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      await sendMessage("Nenhum arquivo selecionado", { role: 'assistant' });
+      return;
+    }
+
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      await sendMessage(`Tipo de arquivo não suportado: ${file.type}. Tipos permitidos: ${ALLOWED_TYPES.join(", ")}`, { role: 'assistant' });
+      return;
+    }
+
+    if (file.size === 0) {
+      await sendMessage("O arquivo está vazio", { role: 'assistant' });
+      return;
+    }
+
+    const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+    if (file.size > MAX_SIZE) {
+      await sendMessage("O arquivo excede o limite de 10MB", { role: 'assistant' });
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      setUploadProgress(0);
+
+      // Simular progresso do upload
+      const interval = setInterval(() => {
+        setUploadProgress(prev => Math.min(prev + 10, 90));
+      }, 500);
+
+      console.log('📤 Iniciando upload do arquivo:', {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        scope
+      });
+
+      const client = createRagieClient(process.env.NEXT_PUBLIC_RAGIE_API_KEY || '');
+      const response = await client.uploadDocument(file, { scope });
+      
+      clearInterval(interval);
+      setUploadProgress(100);
+
+      console.log('✅ Upload concluído:', response);
+      await sendMessage(`Upload concluído com sucesso! ID do documento: ${response.id}`, { role: 'assistant' });
+      
+      // Recarregar lista de documentos
+      const docsResponse = await processCommand("/docs");
+      if (docsResponse) {
+        await sendMessage(docsResponse, { role: 'assistant' });
+      }
+
+    } catch (error) {
+      console.error('❌ Erro no upload:', error);
+      await sendMessage(`Erro ao fazer upload do arquivo: ${error instanceof Error ? error.message : 'Erro desconhecido'}`, { role: 'assistant' });
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
-    
-    await sendMessage(input);
-    setInput("");
-  };
+    if (!input.trim() || isLoading || isProcessing) return;
 
-  const handleChangeModel = (model: ModelType) => {
-    setCurrentModel(model);
-    clearMessages(); // Limpa o histórico ao trocar de modelo
-  };
+    const message = input.trim();
+    setInput('');
 
-  const handleSort = (column: string) => {
-    setSortConfig(prev => ({
-      column,
-      direction: prev.column === column && prev.direction === 'desc' ? 'asc' : 'desc'
-    }));
-  };
-
-  const handleExport = (content: string) => {
-    const csv = exportTableData(content, 'csv');
-    if (csv) {
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'table-data.csv';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+    try {
+      console.log('📨 Enviando mensagem:', message);
+      if (message.startsWith('/')) {
+        console.log('🔍 Processando comando:', message);
+        const response = await processCommand(message);
+        if (response) {
+          await sendMessage(response, { role: 'assistant' });
+        }
+      } else {
+        await sendMessage(message);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao enviar mensagem:', error);
+      await sendMessage(`Erro ao processar mensagem: ${error instanceof Error ? error.message : 'Erro desconhecido'}`, { role: 'assistant' });
     }
   };
 
-  const formatContent = (content: string) => {
-    return formatTableData(content, {
-      page: currentPage,
-      pageSize: 10,
-      sortColumn: sortConfig.column,
-      sortDirection: sortConfig.direction
-    });
+  const handleDeleteDocument = async (docId: string) => {
+    try {
+      console.log('🗑️ Iniciando exclusão do documento:', docId);
+      const client = createRagieClient(process.env.NEXT_PUBLIC_RAGIE_API_KEY || '');
+      await client.deleteDocument(docId);
+      console.log('✅ Documento excluído com sucesso');
+      
+      await sendMessage(`Documento ${docId} excluído com sucesso!`, { role: 'assistant' });
+      setIsDocumentModalOpen(false);
+      
+      // Recarregar lista de documentos
+      const response = await processCommand("/docs");
+      if (response) {
+        await sendMessage(response, { role: 'assistant' });
+      }
+    } catch (error) {
+      console.error('❌ Erro ao excluir documento:', error);
+      await sendMessage(`Erro ao excluir documento: ${error instanceof Error ? error.message : 'Erro desconhecido'}`, { role: 'assistant' });
+    }
   };
 
-  // Calcula o número total de páginas
-  const getTotalPages = (content: string): number => {
-    const lines = content.split('\n').filter(line => line.trim());
-    // Remove o cabeçalho e a linha de separação
-    const dataRows = lines.filter(line => !line.includes('Classificação') && !line.includes('---'));
-    return Math.ceil(dataRows.length / 10);
+  const handleUpdateMetadata = async (docId: string, metadata: string) => {
+    try {
+      console.log('📝 Atualizando metadados:', { docId, metadata });
+      const metadataObj = JSON.parse(metadata);
+      
+      const client = createRagieClient(process.env.NEXT_PUBLIC_RAGIE_API_KEY || '');
+      await client.updateMetadata(docId, metadataObj);
+      
+      console.log('✅ Metadados atualizados com sucesso');
+      await sendMessage(`Metadados do documento ${docId} atualizados com sucesso!`, { role: 'assistant' });
+      
+      // Recarregar detalhes do documento
+      const updatedDoc = await client.getDocument(docId);
+      setSelectedDocument(updatedDoc);
+    } catch (error) {
+      console.error('❌ Erro ao atualizar metadados:', error);
+      if (error instanceof SyntaxError) {
+        await sendMessage("Erro: O formato do JSON é inválido", { role: 'assistant' });
+      } else {
+        await sendMessage(`Erro ao atualizar metadados: ${error instanceof Error ? error.message : 'Erro desconhecido'}`, { role: 'assistant' });
+      }
+    }
   };
 
   return (
     <>
-      <div className="fixed top-0 left-0 right-0 border-b bg-white z-50 px-4 py-2">
-        <div className="max-w-3xl mx-auto">
-          <Toolbar 
-            onClearChat={clearMessages}
-            currentModel={currentModel}
-            onChangeModel={handleChangeModel}
-          />
-        </div>
-      </div>
+      <Card className="w-full max-w-[800px] h-[600px] mx-auto">
+        <CardHeader className="flex justify-between items-center px-4 py-2 bg-default-100">
+          <div className="flex items-center gap-2">
+            <FileText className="w-5 h-5" />
+            <h3 className="text-lg font-semibold">Chat com Documentos</h3>
+          </div>
+          <div className="flex gap-2">
+            <Tooltip content="Limpar conversa">
+              <Button
+                isIconOnly
+                variant="light"
+                onPress={clearMessages}
+                className="min-w-unit-8"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </Tooltip>
+            <Tooltip content="Buscar nos documentos">
+              <Button
+                isIconOnly
+                variant="light"
+                onPress={() => setInput("/search ")}
+                className="min-w-unit-8"
+              >
+                <Search className="w-4 h-4" />
+              </Button>
+            </Tooltip>
+            <Tooltip content="Upload de documento">
+              <Button
+                isIconOnly
+                variant="light"
+                onPress={() => setShowUpload(!showUpload)}
+                className="min-w-unit-8"
+              >
+                {showUpload ? <X className="w-4 h-4" /> : <Upload className="w-4 h-4" />}
+              </Button>
+            </Tooltip>
+          </div>
+        </CardHeader>
 
-      <div className="fixed bottom-0 left-0 right-0 z-40">
-        <Card className="mx-auto max-w-3xl rounded-b-none shadow-lg bg-white">
-          <div className="max-h-[60vh] overflow-y-auto p-4 bg-gray-50 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            <div className="space-y-3">
-              {messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={`p-3 rounded-lg ${
-                    m.role === "user" 
-                      ? "bg-blue-50 ml-auto text-gray-800" 
-                      : "bg-white"
-                  } max-w-[85%] shadow-sm animate-in fade-in-0 slide-in-from-bottom-5`}
-                >
-                  {m.role === "assistant" && m.content.includes("|") && (
-                    <div className="flex flex-col gap-2 mb-2">
-                      <div className="flex justify-end gap-2">
-                        <Dropdown>
-                          <DropdownTrigger>
-                            <Button 
-                              size="sm" 
+        <Divider />
+
+        <CardBody className="p-4 overflow-y-auto">
+          {messages.map((msg, index) => {
+            const documents = msg.role === 'assistant' ? extractDocuments(msg.content) : null;
+            
+            return (
+              <div
+                key={index}
+                className={`mb-4 p-3 rounded-lg max-w-[80%] ${
+                  msg.role === "user"
+                    ? "ml-auto bg-primary text-white"
+                    : "bg-default-100"
+                }`}
+              >
+                {documents 
+                  ? msg.content.split('\n').map((line, i) => {
+                      const docMatch = line.match(/- (.*?) \((.*?)\)/);
+                      if (docMatch) {
+                        return (
+                          <div key={i} className="flex items-center gap-2 my-1">
+                            <span>{line}</span>
+                            <Button
+                              isIconOnly
+                              size="sm"
                               variant="light"
-                              startContent={<ArrowUpDown className="h-4 w-4" />}
+                              className="min-w-unit-6 h-unit-6"
+                              onPress={() => handleDocumentClick(docMatch[2])}
                             >
-                              Ordenar
+                              <Info className="w-3 h-3" />
                             </Button>
-                          </DropdownTrigger>
-                          <DropdownMenu aria-label="Ordenar tabela">
-                            <DropdownItem key="points" onClick={() => handleSort('points')}>
-                              Por Pontos
-                            </DropdownItem>
-                            <DropdownItem key="team" onClick={() => handleSort('team')}>
-                              Por Time
-                            </DropdownItem>
-                          </DropdownMenu>
-                        </Dropdown>
-                        <Button
-                          size="sm"
-                          variant="light"
-                          startContent={<Download className="h-4 w-4" />}
-                          onClick={() => handleExport(m.content)}
-                        >
-                          Exportar
-                        </Button>
-                      </div>
-                      {getTotalPages(m.content) > 1 && (
-                        <div className="flex justify-center">
-                          <Pagination
-                            total={getTotalPages(m.content)}
-                            page={currentPage}
-                            onChange={setCurrentPage}
-                            size="sm"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  <ReactMarkdown 
-                    remarkPlugins={[remarkGfm]}
-                    className="prose dark:prose-invert max-w-none"
-                  >
-                    {formatContent(m.content)}
-                  </ReactMarkdown>
-                </div>
-              ))}
-              {isLoading && (
-                <div className="flex justify-center p-2 animate-in fade-in-0">
-                  <Spinner size="sm" />
-                </div>
+                          </div>
+                        );
+                      }
+                      return <div key={i} className="whitespace-pre-wrap">{line}</div>;
+                    })
+                  : <div className="whitespace-pre-wrap">{msg.content}</div>
+                }
+              </div>
+            );
+          })}
+          {(isLoading || isProcessing) && (
+            <div className="flex justify-center">
+              <Spinner size="sm" />
+            </div>
+          )}
+        </CardBody>
+
+        {showUpload && (
+          <div className="p-4 bg-default-50">
+            <div className="flex flex-col gap-2">
+              <Input
+                ref={fileInputRef}
+                type="file"
+                label="Upload de Documento"
+                description="Arquivos suportados: PDF, DOCX, TXT, JSON, MD"
+                accept={ALLOWED_TYPES.join(',')}
+                isDisabled={isUploading}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleUpload(e);
+                }}
+              />
+              <Input
+                label="Escopo"
+                placeholder="Digite o escopo do documento"
+                value={scope}
+                onChange={(e) => setScope(e.target.value)}
+                size="sm"
+                isDisabled={isUploading}
+              />
+              {isUploading && (
+                <Progress
+                  size="sm"
+                  value={uploadProgress}
+                  color="primary"
+                  className="max-w-md"
+                  showValueLabel={true}
+                />
               )}
-              {error && (
-                <div className="p-3 rounded-lg bg-red-50 text-red-600 text-sm animate-in fade-in-0 slide-in-from-top-5">
-                  {error}
-                </div>
-              )}
-              <div ref={messagesEndRef} />
             </div>
           </div>
+        )}
 
-          <div className="border-t bg-white p-4">
-            <MultimodalInput
-              input={input}
-              setInput={setInput}
-              handleSubmit={handleSubmit}
-              isLoading={isLoading}
+        <CardFooter className="p-4">
+          <form onSubmit={handleSubmit} className="flex gap-2 w-full">
+            <Textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Digite uma mensagem ou use / para comandos..."
+              minRows={1}
+              maxRows={4}
+              className="flex-grow"
+              disabled={isLoading || isProcessing}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (!isLoading && !isProcessing && input.trim()) {
+                    handleSubmit(e);
+                  }
+                }
+              }}
             />
-          </div>
-        </Card>
-      </div>
+            <Button
+              isIconOnly
+              type="submit"
+              color="primary"
+              isLoading={isLoading || isProcessing}
+              className="min-w-unit-12"
+            >
+              {!isLoading && !isProcessing && <Send className="w-4 h-4" />}
+            </Button>
+          </form>
+        </CardFooter>
+      </Card>
+
+      <Modal 
+        isOpen={isDocumentModalOpen} 
+        onClose={() => setIsDocumentModalOpen(false)}
+        size="2xl"
+      >
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex flex-col gap-1">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-semibold">
+                    {selectedDocument?.name || 'Detalhes do Documento'}
+                  </h3>
+                  <Button
+                    color="danger"
+                    variant="light"
+                    size="sm"
+                    onPress={() => {
+                      if (confirm('Tem certeza que deseja excluir este documento?')) {
+                        handleDeleteDocument(selectedDocument.id);
+                      }
+                    }}
+                  >
+                    Excluir Documento
+                  </Button>
+                </div>
+                <p className="text-sm text-default-500">
+                  ID: {selectedDocument?.id}
+                </p>
+              </ModalHeader>
+              <ModalBody>
+                <Tabs aria-label="Detalhes do documento">
+                  <Tab key="info" title="Informações">
+                    <div className="space-y-4">
+                      <div>
+                        <h4 className="font-medium">Status</h4>
+                        <p className="text-default-500">{selectedDocument?.status}</p>
+                      </div>
+                      <div>
+                        <h4 className="font-medium">Escopo</h4>
+                        <p className="text-default-500">{selectedDocument?.metadata?.scope || 'Nenhum'}</p>
+                      </div>
+                      <div>
+                        <h4 className="font-medium">Criado em</h4>
+                        <p className="text-default-500">
+                          {selectedDocument?.createdAt && new Date(selectedDocument.createdAt).toLocaleString('pt-BR')}
+                        </p>
+                      </div>
+                      <div>
+                        <h4 className="font-medium">Atualizado em</h4>
+                        <p className="text-default-500">
+                          {selectedDocument?.updatedAt && new Date(selectedDocument.updatedAt).toLocaleString('pt-BR')}
+                        </p>
+                      </div>
+                    </div>
+                  </Tab>
+                  <Tab key="metadata" title="Metadados">
+                    <div className="space-y-4">
+                      <Textarea
+                        label="Metadados do Documento"
+                        placeholder="Digite os metadados em formato JSON"
+                        value={JSON.stringify(selectedDocument?.metadata, null, 2)}
+                        minRows={5}
+                        onChange={(e) => {
+                          try {
+                            const newMetadata = JSON.parse(e.target.value);
+                            handleUpdateMetadata(selectedDocument.id, newMetadata);
+                          } catch (error) {
+                            toast.error("JSON inválido");
+                          }
+                        }}
+                      />
+                      <div className="text-sm text-default-500">
+                        Dica: Os metadados devem estar em formato JSON válido
+                      </div>
+                    </div>
+                  </Tab>
+                  <Tab key="actions" title="Ações">
+                    <div className="space-y-4">
+                      <div className="flex flex-col gap-2">
+                        <Button
+                          color="primary"
+                          variant="flat"
+                          onPress={() => {
+                            setInput(`/search ${selectedDocument?.metadata?.scope || ''} `);
+                            onClose();
+                          }}
+                          startContent={<Search className="w-4 h-4" />}
+                        >
+                          Buscar neste documento
+                        </Button>
+                        <Button
+                          color="danger"
+                          variant="flat"
+                          onPress={() => {
+                            if (confirm('Tem certeza que deseja excluir este documento?')) {
+                              handleDeleteDocument(selectedDocument.id);
+                            }
+                          }}
+                          startContent={<Trash2 className="w-4 h-4" />}
+                        >
+                          Excluir documento
+                        </Button>
+                      </div>
+                    </div>
+                  </Tab>
+                </Tabs>
+              </ModalBody>
+              <ModalFooter>
+                <Button
+                  color="danger"
+                  variant="light"
+                  onPress={onClose}
+                >
+                  Fechar
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
     </>
   );
 } 

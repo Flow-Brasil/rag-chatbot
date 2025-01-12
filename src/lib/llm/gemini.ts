@@ -2,36 +2,47 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { LLMModel, Message, LLMResponse } from "@/lib/types/llm";
 
 export class GeminiModel implements LLMModel {
-  private model: GoogleGenerativeAI;
+  private model: any;
 
   constructor(apiKey: string) {
-    this.model = new GoogleGenerativeAI(apiKey);
+    const genAI = new GoogleGenerativeAI(apiKey);
+    this.model = genAI.getGenerativeModel({ model: "gemini-pro" });
   }
 
-  async invoke(messages: Message[]): Promise<LLMResponse> {
+  async invoke(messages: Message[], data?: {
+    documentId?: string;
+    scope?: string;
+  }): Promise<LLMResponse> {
     try {
-      // Configurar o modelo Gemini
-      const model = this.model.getGenerativeModel({ model: "gemini-pro" });
+      // Preparar o prompt com base no contexto
+      let prompt = "";
 
-      // Preparar o histórico de mensagens para o modelo
-      const prompt = messages
-        .map(m => `${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`)
-        .join('\n');
+      if (data?.documentId) {
+        prompt += `Responda com base no documento ${data.documentId}`;
+        if (data.scope) {
+          prompt += ` no escopo "${data.scope}"`;
+        }
+        prompt += ".\n\n";
+      }
+
+      // Adicionar histórico de mensagens
+      messages.forEach((m) => {
+        prompt += `${m.role === "user" ? "Usuário" : "Assistente"}: ${m.content}\n`;
+      });
 
       // Gerar resposta
-      const result = await model.generateContent(prompt);
+      const result = await this.model.generateContent(prompt);
       const response = await result.response;
       const text = response.text();
 
       return {
         content: text,
-        error: undefined
       };
     } catch (error) {
-      console.error('Erro ao chamar Gemini:', error);
+      console.error("Gemini Error:", error);
       return {
-        content: '',
-        error: error instanceof Error ? error.message : 'Erro desconhecido'
+        content: "",
+        error: error instanceof Error ? error.message : "Erro desconhecido",
       };
     }
   }

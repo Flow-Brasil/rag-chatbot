@@ -2,9 +2,9 @@ export type ModelType = "gemini" | "groq";
 
 export interface Message {
   id: string;
-  role: string;
+  role: "user" | "assistant";
   content: string;
-  timestamp?: number;
+  timestamp: number;
   metadata?: Record<string, unknown>;
 }
 
@@ -22,7 +22,10 @@ export interface LLMResponse {
 }
 
 export interface LLMModel {
-  invoke(messages: Message[]): Promise<LLMResponse>;
+  invoke(messages: Message[], data?: {
+    documentId?: string;
+    scope?: string;
+  }): Promise<LLMResponse>;
 }
 
 export interface ChatMessage extends Message {

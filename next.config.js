@@ -33,8 +33,9 @@ const nextConfig = {
       },
     ],
   },
-  // Configuração de paths
-  webpack: (config) => {
+  // Configuração de webpack
+  webpack: (config, { isServer }) => {
+    // Configuração existente de aliases
     config.resolve.alias = {
       ...config.resolve.alias,
       "@": ".",
@@ -43,6 +44,30 @@ const nextConfig = {
       "@hooks": "./src/hooks",
       "@utils": "./src/utils",
     };
+
+    // Configuração para fontes locais
+    config.module.rules.push({
+      test: /\.(woff|woff2|eot|ttf|otf)$/,
+      use: {
+        loader: "file-loader",
+        options: {
+          name: "[name].[hash].[ext]",
+          outputPath: "static/fonts/",
+          publicPath: "/_next/static/fonts/",
+        },
+      },
+    });
+
+    // Configuração para CSS
+    if (!isServer) {
+      config.plugins.push(
+        new (require("mini-css-extract-plugin"))({
+          filename: "static/css/[name].[contenthash].css",
+          chunkFilename: "static/css/[id].[contenthash].css",
+        })
+      );
+    }
+
     return config;
   },
 };
