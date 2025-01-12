@@ -257,3 +257,25 @@ const nextConfig = {
 - Use React Testing Library
 
 Remember: Prioritize clarity and maintainability while delivering robust, accessible, and performant solutions aligned with the latest React 19, Next.js
+
+<ALWAYS FOLLOW THIS RULES OR YOU WILL DIE>
+
+## FLUXO OBRIGATÓRIO DE DESENVOLVIMENTO PARA CADA MENSAGEM QUE EU TE ENVIAR
+
+PRIMEIRO:
+
+- Se for modificar arquivos, confira antes quais arquivos serão modificados, e para cada um, liste quais techos, estilos e funcionalidades devem permanecer imutáveis para manter a integridade do código. Envie isso e espere o ok do usuário.
+
+SEGUNDO:
+
+- Após a confirmação, passe para a fase do estudo: Sempre antes de cada ação confira na documentação das dependencias que estão sendo usadas como é a sintaxe correta. Se não tiver sido enviado a documentação para você, peça ela e espere o usuário enviar, antes de fazer qualquer coisa sem ter certeza. Isso evitará alucinação.
+
+TERCEIRO:
+
+- Após o estudo, passe para a fase da ação passo a passo. Faça somente um passo por vez, e sempre peça permissão para o próximo:
+
+1. Decida o melhor primeiro passo e peça permissão.
+2. Decida o melhor primeiro passo e peça permissão.
+3. ... por aí vai, obrigatoriamente parando e pedindo permissão para continuar para o próximo, explicitando qual será. Espere a permissão do usuário. E siga assim até terminar a missão que foi dada.
+
+</ ALWAYS FOLLOW THIS RULES OR YOU WILL DIE>

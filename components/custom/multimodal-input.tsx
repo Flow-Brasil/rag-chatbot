@@ -128,17 +128,21 @@ export function MultimodalInput({
   };
 
   const handleApiKeySubmit = () => {
-    if (apiKey.trim()) {
-      if (!apiKey.startsWith("tnt_") || apiKey.length < 20) {
-        toast.error("Por favor, insira uma API key válida da Ragie");
-        return;
-      }
-      localStorage.setItem("ragie_api_key", apiKey.trim());
-      toast.success("API key atualizada com sucesso!");
-      setShowApiKeyInput(false);
-    } else {
+    const trimmedKey = apiKey.trim();
+    if (!trimmedKey) {
       toast.error("Por favor, insira uma API key válida");
+      return;
     }
+    
+    if (!trimmedKey.startsWith("tnt_") || trimmedKey.length < 20) {
+      toast.error("API key inválida. Deve começar com 'tnt_' e ter pelo menos 20 caracteres.");
+      return;
+    }
+    
+    localStorage.setItem("ragie_api_key", trimmedKey);
+    setCustomApiKey(trimmedKey);
+    toast.success("API key salva com sucesso!");
+    setShowApiKeyInput(false);
   };
 
   const handleModelSwitch = () => {
@@ -149,9 +153,10 @@ export function MultimodalInput({
   };
 
   const handleRestore = () => {
+    const defaultApiKey = "tnt_46Qnib7kZaD_Ifcd9HQUauLIooSdXSRwIvfvMU04gsKhlbHxPg51YvA";
     setSelectedModel(AI_MODELS[0]);
-    localStorage.setItem("ragie_api_key", "tnt_46Qnib7kZaD_Ifcd9HQUauLIooSdXSRwIvfvMU04gsKhlbHxPg51YvA");
-    setApiKey("tnt_46Qnib7kZaD_Ifcd9HQUauLIooSdXSRwIvfvMU04gsKhlbHxPg51YvA");
+    localStorage.setItem("ragie_api_key", defaultApiKey);
+    setApiKey(defaultApiKey);
     setCustomApiKey(null);
     setInput("");
     setSelectedFile(null);
@@ -164,14 +169,20 @@ export function MultimodalInput({
 
   const handleClearApiKey = () => {
     setApiKey("");
+    setCustomApiKey(null);
     setShowApiKeyInput(false);
+  };
+
+  const handleSubmitForm = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSubmit(e);
   };
 
   return (
     <>
-      <div className="flex flex-col w-full max-w-4xl mx-auto bg-white/50 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200">
+      <div className="flex flex-col w-full max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-gray-100">
         <form
-          onSubmit={handleSubmit}
+          onSubmit={handleSubmitForm}
           className="flex flex-col gap-4 p-4"
         >
           <div className="flex items-center gap-2">
@@ -179,9 +190,15 @@ export function MultimodalInput({
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmitForm(e);
+                  }
+                }}
                 placeholder="Digite sua mensagem..."
                 rows={1}
-                className="w-full resize-none bg-transparent px-4 py-[1.3rem] focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-base border rounded-xl transition-all"
+                className="w-full resize-none bg-white px-4 py-[1.3rem] focus:outline-none focus:ring-2 focus:ring-blue-100 text-gray-800 border border-gray-200 rounded-xl transition-all"
                 style={{
                   maxHeight: "200px",
                   height: "60px",
@@ -192,131 +209,75 @@ export function MultimodalInput({
             <div className="flex flex-col gap-2">
               <Button
                 type="submit"
-                className="bg-primary text-primary-foreground hover:bg-primary/90 h-[60px] px-4 transition-colors duration-200"
+                isDisabled={isLoading || !input.trim()}
+                isIconOnly
                 aria-label="Enviar mensagem"
+                className="bg-blue-500 text-white hover:bg-blue-600"
               >
-                <Bot className="h-5 w-5" />
+                <Bot className="w-5 h-5" />
               </Button>
-              <Tooltip content={showToolbar ? "Ocultar ferramentas" : "Mostrar ferramentas"}>
-                <Button
-                  isIconOnly
-                  variant="light"
-                  onClick={() => setShowToolbar(!showToolbar)}
-                  className="text-default-600 hover:bg-blue-50 transition-all duration-200 h-[30px]"
-                  aria-label={showToolbar ? "Ocultar barra de ferramentas" : "Mostrar barra de ferramentas"}
-                >
-                  <ChevronDown 
-                    className={`h-5 w-5 transition-transform duration-200 ${
-                      showToolbar ? "rotate-180" : ""
-                    }`}
-                  />
-                </Button>
-              </Tooltip>
             </div>
           </div>
-
           {showToolbar && (
-            <div className="flex flex-col gap-2">
-              <div className="flex gap-2 px-4 py-2 border-t border-gray-100">
-                <Tooltip content="Listar documentos" placement="bottom">
-                  <Button
-                    isIconOnly
-                    variant="light"
-                    onClick={handleListDocuments}
-                    className="text-default-600 hover:bg-blue-50 transition-all duration-200"
-                    isLoading={isProcessing}
-                    aria-label="Listar documentos disponíveis"
-                  >
-                    <Database className="h-5 w-5" />
-                  </Button>
-                </Tooltip>
-
-                <Tooltip content="Fazer upload de documento" placement="bottom">
-                  <Button
-                    isIconOnly
-                    variant="light"
-                    onClick={() => setShowUploadModal(true)}
-                    className="text-default-600 hover:bg-blue-50 transition-all duration-200"
-                    aria-label="Fazer upload de documento JSON"
-                  >
-                    <Upload className="h-5 w-5" />
-                  </Button>
-                </Tooltip>
-
-                <Tooltip content="Configurar API Key personalizada" placement="bottom">
-                  <Button
-                    isIconOnly
-                    variant="light"
-                    onClick={() => setShowApiKeyInput(!showApiKeyInput)}
-                    className="text-default-600 hover:bg-blue-50 transition-all duration-200"
-                    aria-label="Configurar API key personalizada"
-                  >
-                    <Pencil className="h-5 w-5" />
-                  </Button>
-                </Tooltip>
-
-                <Tooltip content={`Alterar modelo (atual: ${selectedModel.name})`} placement="bottom">
-                  <Button
-                    isIconOnly
-                    variant="light"
-                    onClick={handleModelSwitch}
-                    className="text-default-600 hover:bg-blue-50 transition-all duration-200"
-                    aria-label="Alterar modelo de IA"
-                  >
-                    <Repeat className="h-5 w-5" />
-                  </Button>
-                </Tooltip>
-
-                <Tooltip content="Restaurar configurações padrão" placement="bottom">
-                  <Button
-                    isIconOnly
-                    variant="light"
-                    onClick={handleRestore}
-                    className="text-default-600 hover:bg-blue-50 transition-all duration-200"
-                    aria-label="Restaurar configurações"
-                    isDisabled={messages.length === 0 && !customApiKey && selectedModel.key === "gemini"}
-                  >
-                    <RefreshCw className="h-5 w-5" />
-                  </Button>
-                </Tooltip>
-              </div>
-
+            <div className="flex items-center gap-2">
+              <Tooltip content="Configurar API key personalizada">
+                <Button
+                  type="button"
+                  onClick={() => setShowApiKeyInput(!showApiKeyInput)}
+                  isIconOnly
+                  variant="light"
+                  aria-label="Configurar API key personalizada"
+                >
+                  <Pencil className="w-5 h-5" />
+                </Button>
+              </Tooltip>
               {showApiKeyInput && (
-                <div className="flex gap-2 items-end px-4 animate-in fade-in-0 slide-in-from-top-5">
+                <div className="flex items-center gap-2">
                   <input
-                    type="password"
-                    placeholder="Cole sua API key aqui para sobrescrever a padrão"
+                    type="text"
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
-                    className="flex-1 p-2 rounded-lg border"
+                    onBlur={handleApiKeySubmit}
+                    placeholder="Cole sua API key aqui para sobrescrever a padrão"
+                    className="flex-grow px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100"
                   />
-                  {apiKey && (
-                    <Button
-                      isIconOnly
-                      variant="light"
-                      onClick={handleClearApiKey}
-                      className="text-default-600 hover:bg-blue-50 transition-all duration-200"
-                      aria-label="Limpar API key"
-                    >
-                      <X className="h-5 w-5" />
-                    </Button>
-                  )}
+                  <Button
+                    type="button"
+                    onClick={handleClearApiKey}
+                    isIconOnly
+                    variant="light"
+                    aria-label="Limpar API key"
+                  >
+                    <X className="w-5 h-5" />
+                  </Button>
                 </div>
               )}
+              <Tooltip content="Restaurar configurações">
+                <Button
+                  type="button"
+                  onClick={handleRestore}
+                  isIconOnly
+                  variant="light"
+                  isDisabled={!customApiKey && !messages.length && selectedModel.key === AI_MODELS[0].key}
+                  aria-label="Restaurar configurações"
+                >
+                  <RefreshCw className="w-5 h-5" />
+                </Button>
+              </Tooltip>
             </div>
           )}
         </form>
       </div>
 
       <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px] bg-white">
           <DialogHeader>
             <DialogTitle>Upload de Documento JSON</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="border-2 border-dashed rounded-lg p-6 transition-colors hover:border-blue-400">
+            <div className="border-2 border-dashed rounded-lg p-6 transition-colors hover:border-blue-400 bg-gray-50">
               <div className="text-center mb-4">
-                <h3 className="text-sm font-medium mb-2">Selecione um arquivo JSON</h3>
+                <h3 className="text-sm font-medium text-gray-800 mb-2">Selecione um arquivo JSON</h3>
                 <p className="text-xs text-gray-500">Apenas arquivos .json são aceitos</p>
               </div>
               <input
@@ -341,7 +302,7 @@ export function MultimodalInput({
                   <>
                     {selectedFile ? (
                       <div className="text-center">
-                        <p className="font-medium">{selectedFile.name}</p>
+                        <p className="font-medium text-gray-800">{selectedFile.name}</p>
                         <p className="text-xs text-gray-500 mt-1">
                           {(selectedFile.size / 1024).toFixed(2)} KB
                         </p>

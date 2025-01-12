@@ -22,17 +22,27 @@ jest.mock("@nextui-org/react", () => ({
     isIconOnly,
     variant,
     className,
-    "aria-label": ariaLabel 
+    "aria-label": ariaLabel,
+    type
   }: {
     children: React.ReactNode;
-    onClick?: () => void;
+    onClick?: (e: React.MouseEvent) => void;
     isDisabled?: boolean;
     isIconOnly?: boolean;
     variant?: string;
     className?: string;
     "aria-label"?: string;
+    type?: "button" | "submit" | "reset";
   }) => (
-    <button onClick={onClick} disabled={isDisabled} aria-label={ariaLabel}>
+    <button 
+      onClick={(e) => {
+        e.preventDefault();
+        onClick?.(e);
+      }} 
+      disabled={isDisabled} 
+      aria-label={ariaLabel}
+      type={type || "button"}
+    >
       {children}
     </button>
   ),
@@ -45,28 +55,38 @@ jest.mock("@nextui-org/react", () => ({
     value,
     onChange,
     type,
-    placeholder 
+    placeholder,
+    onBlur 
   }: {
     value?: string;
     onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
     type?: string;
     placeholder?: string;
+    onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
   }) => (
     <input
       value={value}
       onChange={onChange}
+      onBlur={onBlur}
       type={type}
       placeholder={placeholder}
     />
   ),
 }));
 
-// Mock do localStorage
+// Mock do localStorage com valores iniciais válidos
+const mockStorage: { [key: string]: string } = {};
 const localStorageMock = {
-  getItem: jest.fn(),
-  setItem: jest.fn(),
-  removeItem: jest.fn(),
-  clear: jest.fn(),
+  getItem: jest.fn((key: string) => mockStorage[key] || null),
+  setItem: jest.fn((key: string, value: string) => {
+    mockStorage[key] = value;
+  }),
+  removeItem: jest.fn((key: string) => {
+    delete mockStorage[key];
+  }),
+  clear: jest.fn(() => {
+    Object.keys(mockStorage).forEach(key => delete mockStorage[key]);
+  }),
 };
 Object.defineProperty(window, "localStorage", { value: localStorageMock });
 
@@ -80,6 +100,7 @@ const defaultProps = {
 describe("MultimodalInput", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    localStorageMock.clear();
   });
 
   it("deve iniciar com o botão de restaurar desabilitado quando não há mensagens, API key personalizada ou modelo diferente", () => {
@@ -90,7 +111,7 @@ describe("MultimodalInput", () => {
   });
 
   it("deve habilitar o botão de restaurar quando há mensagens", () => {
-    localStorageMock.getItem.mockReturnValue(JSON.stringify([{ role: "user", content: "test" }]));
+    mockStorage["chat_messages"] = JSON.stringify([{ role: "user", content: "test" }]);
     
     render(<MultimodalInput {...defaultProps} />);
     
@@ -99,7 +120,7 @@ describe("MultimodalInput", () => {
   });
 
   it("deve habilitar o botão de restaurar quando há uma API key personalizada", () => {
-    localStorageMock.getItem.mockReturnValue("tnt_custom_key_123");
+    mockStorage["ragie_api_key"] = "tnt_custom_key_123";
     
     render(<MultimodalInput {...defaultProps} />);
     
@@ -108,6 +129,10 @@ describe("MultimodalInput", () => {
   });
 
   it("deve restaurar todas as configurações ao clicar no botão", () => {
+    // Configura o estado inicial com alguns dados
+    mockStorage["chat_messages"] = JSON.stringify([{ role: "user", content: "test" }]);
+    mockStorage["ragie_api_key"] = "tnt_custom_key_123";
+    
     render(<MultimodalInput {...defaultProps} />);
     
     const restoreButton = screen.getByLabelText("Restaurar configurações");
