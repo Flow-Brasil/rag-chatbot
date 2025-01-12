@@ -1,9 +1,8 @@
 "use client";
 
-import { type Message } from "ai";
+import { type Message } from "@/lib/types/message";
 import { useChat } from "ai/react";
 import { useCallback, useState } from "react";
-import { toast } from "sonner";
 import { useModelSelection } from "./useModelSelection";
 
 interface UseCustomChatProps {
@@ -23,7 +22,8 @@ export function useCustomChat({ initialMessages = [], id }: UseCustomChatProps =
     setMessages
   } = useChat({
     initialMessages,
-    id
+    id,
+    api: '/api/chat'
   });
 
   const [error, setError] = useState<string | null>(null);
@@ -65,21 +65,51 @@ export function useCustomChat({ initialMessages = [], id }: UseCustomChatProps =
           // Atualiza as mensagens com a resposta do comando
           setMessages([
             ...messages,
-            { role: 'user', content: input, id: `user-${Date.now()}` },
-            { role: 'assistant', content: data.content || data.response, id: `assistant-${Date.now()}` }
+            { role: 'user', content: input, id: `user-${Date.now()}` } as Message,
+            { 
+              role: 'assistant', 
+              content: data.content || data.response, 
+              id: `assistant-${Date.now()}`,
+              error: data.error ? true : false
+            } as Message
           ]);
           setInput('');
           return;
         }
 
         // Processa mensagens normais
-        await chatSubmit(e as React.FormEvent<HTMLFormElement>, {
-          data: modelOptions
-        });
+        try {
+          await chatSubmit(e as React.FormEvent<HTMLFormElement>, {
+            data: modelOptions
+          });
+        } catch (error) {
+          // Adiciona mensagem de erro diretamente no chat
+          setMessages([
+            ...messages,
+            { role: 'user', content: input, id: `user-${Date.now()}` } as Message,
+            { 
+              role: 'assistant', 
+              content: error instanceof Error ? error.message : 'Erro ao processar mensagem. Por favor, tente novamente.',
+              id: `assistant-${Date.now()}`,
+              error: true
+            } as Message
+          ]);
+          setInput('');
+        }
       } catch (error) {
         console.error("Error sending message:", error);
-        setError(error instanceof Error ? error.message : "Erro ao enviar mensagem. Por favor, tente novamente.");
-        toast.error("Erro ao enviar mensagem. Por favor, tente novamente.");
+        // Adiciona mensagem de erro diretamente no chat
+        setMessages([
+          ...messages,
+          { role: 'user', content: input, id: `user-${Date.now()}` } as Message,
+          { 
+            role: 'assistant', 
+            content: error instanceof Error ? error.message : 'Erro ao enviar mensagem. Por favor, tente novamente.',
+            id: `assistant-${Date.now()}`,
+            error: true
+          } as Message
+        ]);
+        setInput('');
       }
     },
     [chatSubmit, input, messages, getModelOptions, setMessages, setInput]
