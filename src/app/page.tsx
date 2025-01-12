@@ -1,14 +1,12 @@
 "use client";
 
-import { BaseLayout } from '@/components/layout/BaseLayout';
-import ModelChat from '@/components/ModelChat';
+import { DocumentList } from "@/components/DocumentList";
 
 export default function Home() {
   return (
-    <BaseLayout>
-      <div className="container mx-auto">
-        <ModelChat modelType="gemini" />
-      </div>
-    </BaseLayout>
+    <main className="container mx-auto p-4">
+      <h1 className="text-3xl font-bold mb-8">Documentos</h1>
+      <DocumentList />
+    </main>
   );
 } 
