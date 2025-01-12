@@ -1,90 +1,78 @@
 "use client";
 
-import { useState, useCallback } from 'react';
-import { v4 as uuid } from 'uuid';
-
-interface Message {
-  id: string;
-  content: string;
-  role: 'user' | 'assistant';
-}
-
-interface SendMessageOptions {
-  role?: 'user' | 'assistant';
-  data?: {
-    documentId?: string;
-    scope?: string;
-  };
-}
+import { useCallback, useState } from 'react';
+import type { Message, SendMessageOptions } from '@/lib/types/message';
 
 export function useModelChat(modelType: string = 'gemini') {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const sendMessage = useCallback(async (content: string, options: SendMessageOptions = {}) => {
-    const { role = 'user', data } = options;
-    const messageId = uuid();
-
-    const newMessage: Message = {
-      id: messageId,
-      content,
-      role,
-    };
-
-    setMessages(prev => [...prev, newMessage]);
-
-    if (role === 'user') {
+  const sendMessage = useCallback(async (content: string, options?: SendMessageOptions) => {
+    try {
       setIsLoading(true);
-      try {
-        console.log('Enviando mensagem:', {
-          message: content,
-          modelType,
-          messages: [...messages, newMessage],
-          data,
-        });
-
-        const response = await fetch('/api/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            message: content,
-            modelType,
-            messages: [...messages, newMessage],
-            data,
-          }),
-        });
-
-        if (!response.ok) {
-          let errorMessage = 'Falha ao enviar mensagem';
-          try {
-            const error = await response.json();
-            errorMessage = error.error || error.detail || error.message || errorMessage;
-          } catch {
-            // Se não conseguir parsear o JSON, usa a mensagem padrão
-          }
-          throw new Error(errorMessage);
-        }
-
-        const responseData = await response.json();
-        const assistantMessage: Message = {
-          id: uuid(),
-          content: responseData.response,
-          role: 'assistant',
+      
+      // Adiciona mensagem do usuário se não for erro
+      if (!options?.error) {
+        const userMessage: Message = {
+          id: Date.now().toString(),
+          content,
+          role: 'user'
         };
-
-        setMessages(prev => [...prev, assistantMessage]);
-      } catch (error) {
-        console.error('Erro ao enviar mensagem:', error);
-        // Remove a mensagem do usuário em caso de erro
-        setMessages(prev => prev.slice(0, -1));
-        throw error;
-      } finally {
-        setIsLoading(false);
+        setMessages(prev => [...prev, userMessage]);
       }
+
+      // Se for mensagem de erro, adiciona diretamente
+      if (options?.error) {
+        const errorMessage: Message = {
+          id: Date.now().toString(),
+          content,
+          role: options.role || 'assistant',
+          error: true
+        };
+        setMessages(prev => [...prev, errorMessage]);
+        return;
+      }
+
+      // Faz a requisição para a API
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: content,
+          messages: messages,
+          modelType
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Erro ao processar mensagem');
+      }
+
+      const data = await response.json();
+      
+      const assistantMessage: Message = {
+        id: Date.now().toString(),
+        content: data.response,
+        role: 'assistant'
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      // Adiciona mensagem de erro
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        content: error instanceof Error ? error.message : 'Erro ao processar mensagem',
+        role: 'assistant',
+        error: true
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
     }
-  }, [modelType, messages]);
+  }, [messages, modelType]);
 
   const clearMessages = useCallback(() => {
     setMessages([]);
@@ -94,6 +82,6 @@ export function useModelChat(modelType: string = 'gemini') {
     messages,
     sendMessage,
     clearMessages,
-    isLoading,
+    isLoading
   };
 } 

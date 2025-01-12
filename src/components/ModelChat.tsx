@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useModelChat } from '@/hooks/useModelChat';
 import { useRagieCommands } from '@/hooks/useRagieCommands';
-import { toast } from 'sonner';
 
 interface ModelChatProps {
   modelType?: string;
@@ -19,28 +18,16 @@ export default function ModelChat({ modelType = 'gemini' }: ModelChatProps) {
     const currentInput = input.trim();
     setInput('');
 
-    if (currentInput.startsWith('/')) {
-      try {
-        const response = await processCommand(currentInput);
-        if (response) {
-          await sendMessage(response, { role: 'assistant' });
-        } else {
-          toast.error('Comando não retornou resposta');
-        }
-      } catch (error) {
-        console.error('Erro ao processar comando:', error);
-        toast.error('Erro ao processar comando');
-      }
-      return;
-    }
-
     try {
       await sendMessage(currentInput);
     } catch (error) {
       console.error('Erro ao enviar mensagem:', error);
-      toast.error('Erro ao enviar mensagem');
+      await sendMessage(error instanceof Error ? error.message : 'Erro ao enviar mensagem', {
+        role: 'assistant',
+        error: true
+      });
     }
-  }, [input, isLoading, isProcessing, processCommand, sendMessage]);
+  }, [input, isLoading, isProcessing, sendMessage]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
@@ -55,7 +42,9 @@ export default function ModelChat({ modelType = 'gemini' }: ModelChatProps) {
             className={`p-4 rounded-lg ${
               message.role === 'user' 
                 ? 'bg-blue-100 ml-auto max-w-[80%]' 
-                : 'bg-gray-100 mr-auto max-w-[80%]'
+                : message.error 
+                  ? 'bg-red-50 border border-red-200 mr-auto max-w-[80%] text-red-700'
+                  : 'bg-gray-100 mr-auto max-w-[80%]'
             }`}
           >
             <p className="whitespace-pre-wrap">{message.content}</p>
@@ -74,7 +63,7 @@ export default function ModelChat({ modelType = 'gemini' }: ModelChatProps) {
             type="text"
             value={input}
             onChange={handleInputChange}
-            placeholder="Digite sua mensagem ou comando (/docs, /upload, /search)"
+            placeholder="Digite sua mensagem..."
             className="flex-1 p-2 border rounded-lg"
             disabled={isLoading || isProcessing}
           />
