@@ -2,8 +2,9 @@
 
 import { type Message } from "@/lib/types/message";
 import { useChat } from "ai/react";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useModelSelection } from "./useModelSelection";
+import { createRagieClient } from "@/lib/ragie-client";
 
 interface UseCustomChatProps {
   initialMessages?: Message[];
@@ -22,12 +23,120 @@ export function useCustomChat({ initialMessages = [], id }: UseCustomChatProps =
     setMessages
   } = useChat({
     initialMessages,
-    id,
+    ...(id ? { id } : {}),
     api: '/api/chat'
   });
 
   const [error, setError] = useState<string | null>(null);
   const { selectedModel, getModelOptions } = useModelSelection();
+  const [socket, setSocket] = useState<WebSocket | null>(null);
+  const [ragieClient, setRagieClient] = useState<any>(null);
+
+  // Inicializa o cliente Ragie
+  useEffect(() => {
+    const apiKey = process.env['NEXT_PUBLIC_RAGIE_API_KEY'];
+    if (apiKey) {
+      try {
+        const client = createRagieClient(apiKey);
+        setRagieClient(client);
+      } catch (error) {
+        console.error('❌ Erro ao inicializar cliente Ragie:', error);
+      }
+    }
+  }, []);
+
+  // Conecta ao WebSocket do monitor
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const channelName = Math.random().toString(36).substring(2);
+    const ws = new WebSocket(`ws://localhost:10000/ws?channel=${channelName}`);
+    
+    ws.onopen = () => {
+      console.log('🔌 Conectado ao monitor de chat');
+      document.body.setAttribute('data-channel-name', channelName);
+    };
+    
+    ws.onerror = (error) => {
+      console.error('❌ Erro na conexão com o monitor:', error);
+    };
+    
+    setSocket(ws);
+    
+    return () => {
+      ws.close();
+      document.body.removeAttribute('data-channel-name');
+    };
+  }, []);
+
+  // Função para enviar logs para o monitor
+  const sendLog = useCallback((data: any) => {
+    if (socket?.readyState === WebSocket.OPEN) {
+      socket.send(typeof data === 'string' ? data : JSON.stringify(data));
+    }
+  }, [socket]);
+
+  // Função para detectar comandos Ragie
+  const detectRagieCommand = (input: string) => {
+    const commands = {
+      list: /^\/list/i,
+      search: /^\/search\s+(.+)/i,
+      get: /^\/get\s+(\S+)/i,
+      delete: /^\/delete\s+(\S+)/i,
+    };
+
+    for (const [command, regex] of Object.entries(commands)) {
+      const match = input.match(regex);
+      if (match) {
+        return {
+          command,
+          params: match[1]
+        };
+      }
+    }
+
+    return null;
+  };
+
+  // Função para executar comandos Ragie
+  const executeRagieCommand = async (command: string, params?: string) => {
+    if (!ragieClient) {
+      throw new Error('Cliente Ragie não inicializado');
+    }
+
+    switch (command) {
+      case 'list':
+        const docs = await ragieClient.listDocuments();
+        return docs.length > 0
+          ? `📚 Documentos encontrados:\n${docs.map((doc: any) => 
+              `- ${doc.metadata?.scope || 'Sem escopo'} (${doc.id})`
+            ).join('\n')}`
+          : '📭 Nenhum documento encontrado';
+
+      case 'search':
+        if (!params) throw new Error('Termo de busca não fornecido');
+        const results = await ragieClient.searchDocuments(params);
+        const chunks = results.scoredChunks || [];
+        return chunks.length > 0
+          ? `🔍 Resultados encontrados:\n${chunks.map((chunk: any) =>
+              `- ${chunk.documentName} (score: ${chunk.score})\n  ${chunk.text.substring(0, 200)}...`
+            ).join('\n\n')}`
+          : '🔍 Nenhum resultado encontrado';
+
+      case 'get':
+        if (!params) throw new Error('ID do documento não fornecido');
+        const doc = await ragieClient.getDocument(params);
+        return `📄 Documento encontrado:\nID: ${doc.id}\nStatus: ${doc.status}\nMetadata: ${JSON.stringify(doc.metadata, null, 2)}`;
+
+      case 'delete':
+        if (!params) throw new Error('ID do documento não fornecido');
+        await ragieClient.deleteDocument(params);
+        return '🗑️ Documento deletado com sucesso';
+
+      default:
+        throw new Error('Comando não reconhecido');
+    }
+  };
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent<Element>) => {
@@ -40,69 +149,58 @@ export function useCustomChat({ initialMessages = [], id }: UseCustomChatProps =
       }
 
       try {
-        const modelOptions = getModelOptions();
-        
-        // Adiciona tratamento especial para comandos
-        if (input.startsWith('/')) {
-          const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              messages: [...messages, { role: 'user', content: input }],
-              ...modelOptions
-            }),
-          });
+        // Log da mensagem do usuário
+        sendLog({
+          role: 'user',
+          content: input,
+          timestamp: new Date().toISOString()
+        });
 
-          if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.error || 'Erro ao processar comando');
+        // Verifica se é um comando Ragie
+        const command = detectRagieCommand(input);
+        if (command) {
+          try {
+            const response = await executeRagieCommand(command.command, command.params);
+            
+            // Adiciona as mensagens ao chat
+            setMessages([
+              ...messages,
+              { role: 'user', content: input, id: `user-${Date.now()}` } as Message,
+              { role: 'assistant', content: response, id: `assistant-${Date.now()}` } as Message
+            ]);
+            setInput('');
+            return;
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Erro ao executar comando';
+            setMessages([
+              ...messages,
+              { role: 'user', content: input, id: `user-${Date.now()}` } as Message,
+              { 
+                role: 'assistant', 
+                content: `❌ **Erro no comando**\n${errorMessage}`, 
+                id: `assistant-${Date.now()}`,
+                error: true
+              } as Message
+            ]);
+            setInput('');
+            return;
           }
-
-          const data = await response.json();
-          
-          // Atualiza as mensagens com a resposta do comando
-          setMessages([
-            ...messages,
-            { role: 'user', content: input, id: `user-${Date.now()}` } as Message,
-            { 
-              role: 'assistant', 
-              content: data.error 
-                ? `❌ **Erro no comando**\n${data.error}`
-                : data.content || data.response, 
-              id: `assistant-${Date.now()}`,
-              error: data.error ? true : false
-            } as Message
-          ]);
-          setInput('');
-          return;
         }
 
         // Processa mensagens normais
-        try {
-          await chatSubmit(e as React.FormEvent<HTMLFormElement>, {
-            data: modelOptions
-          });
-        } catch (error) {
-          // Adiciona mensagem de erro diretamente no chat
-          setMessages([
-            ...messages,
-            { role: 'user', content: input, id: `user-${Date.now()}` } as Message,
-            { 
-              role: 'assistant', 
-              content: error instanceof Error 
-                ? `❌ **Erro ao processar mensagem**\n${error.message}`
-                : '❌ **Erro ao processar mensagem**\nPor favor, tente novamente.',
-              id: `assistant-${Date.now()}`,
-              error: true
-            } as Message
-          ]);
-          setInput('');
-        }
+        const modelOptions = getModelOptions();
+        await chatSubmit(e as React.FormEvent<HTMLFormElement>, {
+          data: modelOptions
+        });
       } catch (error) {
         console.error("Error sending message:", error);
-        // Adiciona mensagem de erro diretamente no chat
+        // Log do erro
+        sendLog({
+          role: 'error',
+          content: error instanceof Error ? error.message : 'Erro desconhecido',
+          timestamp: new Date().toISOString()
+        });
+        
         setMessages([
           ...messages,
           { role: 'user', content: input, id: `user-${Date.now()}` } as Message,
@@ -118,7 +216,7 @@ export function useCustomChat({ initialMessages = [], id }: UseCustomChatProps =
         setInput('');
       }
     },
-    [chatSubmit, input, messages, getModelOptions, setMessages, setInput]
+    [chatSubmit, input, messages, getModelOptions, setMessages, setInput, sendLog, ragieClient]
   );
 
   return {

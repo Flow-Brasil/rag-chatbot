@@ -1,97 +1,32 @@
-import { RagieDocument, RetrievalResponse, UploadResponse } from "./types/ragie";
+import { Ragie } from 'ragie';
+import type { RagieMetadata, CreateDocumentRawParams, PatchDocumentMetadataRequest } from './types/ragie';
 
-const RAGIE_API_URL = process.env.NEXT_PUBLIC_RAGIE_API_URL || "https://api.ragie.tech";
+const RAGIE_API_KEY = process.env['NEXT_PUBLIC_RAGIE_API_KEY'] || '';
 
-interface RagieListResponse {
-  pagination: {
-    next_cursor: string | null;
-  };
-  documents: Array<{
-    id: string;
-    created_at: string;
-    updated_at: string;
-    status: string;
-    name: string;
-    metadata: Record<string, any>;
-    partition: string;
-    chunk_count: number;
-    external_id: string | null;
-  }>;
+export function createRagieClient(apiKey: string = RAGIE_API_KEY) {
+  if (!apiKey) {
+    console.error('❌ API key não fornecida');
+    throw new Error('API key do Ragie não configurada');
+  }
+  console.log('🔑 API key configurada:', apiKey.substring(0, 8) + '...');
+  return new Ragie({
+    auth: apiKey
+  });
 }
 
 export class RagieClient {
-  private apiKey: string;
+  private client: Ragie;
 
   constructor(apiKey: string) {
-    if (!apiKey) {
-      console.error('❌ API key não fornecida');
-      throw new Error('API key do Ragie não configurada');
-    }
-    console.log('🔑 API key configurada:', apiKey.substring(0, 8) + '...');
-    this.apiKey = apiKey;
+    this.client = createRagieClient(apiKey);
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    try {
-      const apiKey = process.env.NEXT_PUBLIC_RAGIE_API_KEY;
-      if (!apiKey) {
-        throw new Error('API key não configurada');
-      }
-
-      console.log('🔑 Usando API key:', apiKey.substring(0, 8) + '...');
-      console.log('🌐 URL:', `${RAGIE_API_URL}${endpoint}`);
-      console.log('📡 Método:', options.method || 'GET');
-
-      const headers = new Headers({
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      });
-
-      // Adiciona Content-Type apenas se não for FormData
-      if (!(options.body instanceof FormData)) {
-        headers.append('Content-Type', 'application/json');
-      }
-
-      const response = await fetch(`${RAGIE_API_URL}${endpoint}`, {
-        ...options,
-        headers,
-      });
-
-      console.log('📥 Status:', response.status);
-      console.log('📝 Headers:', Object.fromEntries(response.headers.entries()));
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Erro na resposta:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText
-        });
-        throw new Error(`Erro na API do Ragie: ${response.status} ${response.statusText} - ${errorText}`);
-      }
-
-      const data = await response.json() as T;
-      console.log('✅ Resposta:', data);
-      return data;
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        console.error('❌ Erro na requisição:', {
-          name: error.name,
-          message: error.message,
-          stack: error.stack
-        });
-      } else {
-        console.error('❌ Erro desconhecido:', error);
-      }
-      throw error;
-    }
-  }
-
-  async listDocuments(): Promise<RagieDocument[]> {
+  async listDocuments() {
     try {
       console.log('📚 Listando documentos...');
-      const response = await this.request<{ documents: RagieDocument[] }>('/documents');
-      const documents = response.documents;
+      const response = await this.client.documents.list({});
+      const firstPage = await response.next();
+      const documents = firstPage ? [firstPage] : [];
       console.log(`📋 ${documents.length} documentos encontrados`);
       return documents;
     } catch (error) {
@@ -100,7 +35,7 @@ export class RagieClient {
     }
   }
 
-  async uploadDocument(file: File, metadata: Record<string, any> = {}): Promise<UploadResponse> {
+  async uploadDocument(file: File, metadata: Record<string, any> = {}) {
     console.log('🚀 Iniciando upload:', {
       arquivo: file.name,
       tipo: file.type,
@@ -108,26 +43,29 @@ export class RagieClient {
       metadata
     });
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("metadata", JSON.stringify(metadata));
-    formData.append("mode", "fast");
-
     try {
-      // Verifica se o arquivo é válido
       if (!file.size) {
         throw new Error('Arquivo vazio');
       }
 
-      if (file.size > 10 * 1024 * 1024) { // 10MB
+      if (file.size > 10 * 1024 * 1024) {
         throw new Error('Arquivo muito grande. Limite de 10MB');
       }
 
-      const response = await this.request<UploadResponse>("/documents", {
-        method: "POST",
-        body: formData,
+      const formattedMetadata: RagieMetadata = {};
+      Object.entries(metadata).forEach(([key, value]) => {
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || Array.isArray(value)) {
+          formattedMetadata[key] = value;
+        } else {
+          formattedMetadata[key] = String(value);
+        }
       });
 
+      const response = await this.client.documents.create({
+        file,
+        metadata: formattedMetadata
+      });
+      
       console.log('✅ Upload concluído:', response);
       return response;
     } catch (error) {
@@ -136,22 +74,30 @@ export class RagieClient {
     }
   }
 
-  async uploadRawDocument(content: string, metadata: Record<string, any> = {}): Promise<UploadResponse> {
+  async uploadRawDocument(content: string, metadata: Record<string, any> = {}) {
     console.log('📝 Iniciando upload de conteúdo raw:', {
       tamanho: `${(content.length / 1024).toFixed(2)} KB`,
       metadata
     });
 
     try {
-      const response = await this.request<UploadResponse>("/documents/raw", {
-        method: "POST",
-        body: JSON.stringify({
-          content,
-          metadata,
-          mode: "fast"
-        }),
+      const formattedMetadata: RagieMetadata = {};
+      Object.entries(metadata).forEach(([key, value]) => {
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || Array.isArray(value)) {
+          formattedMetadata[key] = value;
+        } else {
+          formattedMetadata[key] = String(value);
+        }
       });
 
+      const params: CreateDocumentRawParams = {
+        data: {
+          content,
+          metadata: formattedMetadata
+        }
+      };
+
+      const response = await this.client.documents.createRaw(params);
       console.log('✅ Upload raw concluído:', response);
       return response;
     } catch (error) {
@@ -160,19 +106,19 @@ export class RagieClient {
     }
   }
 
-  async searchDocuments(query: string, filter: Record<string, any> = {}): Promise<RetrievalResponse> {
+  async searchDocuments(query: string, filter: Record<string, any> = {}) {
     console.log('🔍 Iniciando busca:', { query, filter });
 
     try {
-      const response = await this.request<RetrievalResponse>("/retrievals", {
-        method: "POST",
-        body: JSON.stringify({
-          query,
-          filter,
-          rerank: true,
-        }),
+      const formattedFilter: Record<string, any> = {};
+      Object.entries(filter).forEach(([key, value]) => {
+        formattedFilter[key] = value;
       });
 
+      const response = await this.client.retrievals.retrieve({
+        query,
+        filter: formattedFilter
+      });
       console.log('✅ Busca concluída:', response);
       return response;
     } catch (error) {
@@ -181,11 +127,13 @@ export class RagieClient {
     }
   }
 
-  async checkDocumentStatus(id: string): Promise<RagieDocument> {
+  async checkDocumentStatus(id: string) {
     console.log('📋 Verificando status do documento:', id);
 
     try {
-      const response = await this.request<RagieDocument>(`/documents/${id}`);
+      const response = await this.client.documents.get({
+        documentId: id
+      });
       console.log('✅ Status verificado:', response);
       return response;
     } catch (error) {
@@ -198,8 +146,8 @@ export class RagieClient {
     console.log('🗑️ Deletando documento:', id);
 
     try {
-      const response = await this.request(`/documents/${id}`, {
-        method: "DELETE",
+      const response = await this.client.documents.delete({
+        documentId: id
       });
       console.log('✅ Documento deletado:', response);
       return response;
@@ -213,10 +161,23 @@ export class RagieClient {
     console.log('📝 Atualizando metadata:', { id, metadata });
 
     try {
-      const response = await this.request(`/documents/${id}/metadata`, {
-        method: "PATCH",
-        body: JSON.stringify({ metadata }),
+      const formattedMetadata: RagieMetadata = {};
+      Object.entries(metadata).forEach(([key, value]) => {
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || Array.isArray(value)) {
+          formattedMetadata[key] = value;
+        } else {
+          formattedMetadata[key] = String(value);
+        }
       });
+
+      const params: PatchDocumentMetadataRequest = {
+        documentId: id,
+        patchDocumentMetadataParams: {
+          metadata: formattedMetadata
+        }
+      };
+
+      const response = await this.client.documents.patchMetadata(params);
       console.log('✅ Metadata atualizada:', response);
       return response;
     } catch (error) {
@@ -225,10 +186,12 @@ export class RagieClient {
     }
   }
 
-  async getDocument(id: string): Promise<RagieDocument> {
+  async getDocument(id: string) {
     try {
       console.log('🔍 Buscando documento:', id);
-      const response = await this.request(`/documents/${id}`) as RagieDocument;
+      const response = await this.client.documents.get({
+        documentId: id
+      });
       console.log('📄 Documento encontrado:', response);
       return response;
     } catch (error) {
@@ -236,8 +199,4 @@ export class RagieClient {
       throw error;
     }
   }
-}
-
-export function createRagieClient(apiKey: string) {
-  return new RagieClient(apiKey);
 } 

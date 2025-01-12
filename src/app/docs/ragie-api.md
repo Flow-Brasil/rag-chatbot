@@ -1,8 +1,8 @@
 # Guia da API Ragie
 
-## Configuração Inicial
+## Configuração
 
-Primeiro, configure sua chave de API como variável de ambiente:
+Para usar a API Ragie, você precisa configurar sua chave de API como uma variável de ambiente:
 
 ```bash
 export RAGIE_API_KEY=seu_token_aqui
@@ -10,24 +10,26 @@ export RAGIE_API_KEY=seu_token_aqui
 
 ## Upload de Documentos
 
-### 1. Enviar Arquivo
+### Upload de Arquivo
+
+Para fazer upload de um arquivo:
 
 ```bash
-curl -X POST https://api.ragie.ai/documents \
-  -H "Accept: application/json" \
+curl -X POST https://api.ragie.tech/documents \
   -H "Authorization: Bearer $RAGIE_API_KEY" \
-  -H "Content-type: multipart/form-data" \
-  -F 'metadata={"scope": "seu-escopo"}' \
-  -F "file=@caminho/do/arquivo" \
-  -F mode=fast
+  -F "file=@seu_arquivo.pdf" \
+  -F "metadata={\"scope\":\"seu-escopo\"}" \
+  -F "mode=fast"
 ```
 
-### 2. Enviar Conteúdo Raw
+### Upload de Conteúdo Raw
+
+Para fazer upload de conteúdo raw:
 
 ```bash
-curl -X POST https://api.ragie.ai/documents/raw \
-  -H "Content-Type: application/json" \
+curl -X POST https://api.ragie.tech/documents/raw \
   -H "Authorization: Bearer $RAGIE_API_KEY" \
+  -H "Content-Type: application/json" \
   -d '{
     "content": "seu conteúdo aqui",
     "metadata": {
@@ -36,12 +38,12 @@ curl -X POST https://api.ragie.ai/documents/raw \
   }'
 ```
 
-## Busca e Recuperação
+## Busca de Informações
 
-### 1. Buscar Informações
+Para buscar informações nos documentos:
 
 ```bash
-curl -X POST https://api.ragie.ai/retrievals \
+curl -X POST https://api.ragie.tech/retrievals \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $RAGIE_API_KEY" \
   -d '{
@@ -53,15 +55,17 @@ curl -X POST https://api.ragie.ai/retrievals \
   }'
 ```
 
-### 2. Gerar Resposta
+## Geração de Respostas
+
+Para gerar respostas baseadas em documentos:
 
 ```bash
-curl -X POST https://api.ragie.ai/tutorial/generate \
+curl -X POST https://api.ragie.tech/tutorial/generate \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $RAGIE_API_KEY" \
   -d '{
     "query": "sua pergunta aqui",
-    "rerank": true,
+    "context": "contexto opcional",
     "filter": {
       "scope": "seu-escopo"
     }
@@ -70,25 +74,30 @@ curl -X POST https://api.ragie.ai/tutorial/generate \
 
 ## Gerenciamento de Documentos
 
-### 1. Verificar Status do Documento
+### Status do Documento
+
+Para verificar o status de um documento:
 
 ```bash
-curl -X GET https://api.ragie.ai/documents/{document_id} \
+curl -X GET https://api.ragie.tech/documents/{document_id} \
   -H "Authorization: Bearer $RAGIE_API_KEY"
 ```
 
-### 2. Deletar Documento
+### Deletar Documento
+
+Para deletar um documento:
 
 ```bash
-curl -X DELETE https://api.ragie.ai/documents/{document_id} \
-  -H "Content-Type: application/json" \
+curl -X DELETE https://api.ragie.tech/documents/{document_id} \
   -H "Authorization: Bearer $RAGIE_API_KEY"
 ```
 
-### 3. Atualizar Metadados
+### Atualizar Metadados
+
+Para atualizar os metadados de um documento:
 
 ```bash
-curl -X PATCH https://api.ragie.ai/documents/{document_id} \
+curl -X PATCH https://api.ragie.tech/documents/{document_id} \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $RAGIE_API_KEY" \
   -d '{
@@ -98,18 +107,15 @@ curl -X PATCH https://api.ragie.ai/documents/{document_id} \
   }'
 ```
 
-## Status dos Documentos
+## Estados dos Documentos
 
-Os documentos passam pelos seguintes estados durante o processamento:
+Um documento pode estar em um dos seguintes estados:
 
-1. `pending` - Aguardando processamento
-2. `partitioning` - Dividindo o documento
-3. `partitioned` - Documento dividido
-4. `refined` - Refinado
-5. `chunked` - Dividido em chunks
-6. `indexed` - Indexado (pode ser usado para busca)
-7. `summary_indexed` - Sumário indexado
-8. `ready` - Pronto para uso
-9. `failed` - Falha no processamento
+- `pending`: Documento recebido, aguardando processamento
+- `partitioning`: Documento está sendo dividido em chunks
+- `partitioned`: Documento foi dividido em chunks com sucesso
+- `indexing`: Chunks estão sendo indexados
+- `indexed`: Documento está pronto para busca
+- `failed`: Ocorreu um erro no processamento
 
-**Nota**: O documento está disponível para busca quando atinge o estado `indexed`, mas o sumário só estará disponível nos estados `summary_indexed` ou `ready`.
+O documento está disponível para busca quando atinge o estado `indexed`.

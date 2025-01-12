@@ -1,112 +1,48 @@
-export type DocumentStatus = 
-  | 'pending'
-  | 'partitioning'
-  | 'partitioned'
-  | 'refined'
-  | 'chunked'
-  | 'indexed'
-  | 'summary_indexed'
-  | 'ready'
-  | 'failed';
+import type { Ragie } from 'ragie';
 
-export interface DocumentMetadata {
-  scope?: string;
-  [key: string]: unknown;
-}
-
-export interface Document {
-  id: string;
-  content: string;
-  metadata: DocumentMetadata;
-  status: DocumentStatus;
-}
-
-export interface RetrievalResult {
-  content: string;
-  score: number;
-  metadata: DocumentMetadata;
-}
-
-export interface CompletionResult {
-  content: string;
-  sources: RetrievalResult[];
+export interface RagieMetadata {
+  [key: string]: string | number | boolean | string[];
 }
 
 export interface RagieDocument {
   id: string;
-  name: string;
-  metadata: Record<string, unknown>;
   status: string;
-  createdAt: string;
-  updatedAt: string;
+  metadata?: RagieMetadata;
+  content?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
-export interface RagieRetrievalRequest {
-  query: string;
-  rerank?: boolean;
-  filter?: {
-    documentId?: string;
-    scope?: string;
+export interface RagieDocumentGet extends RagieDocument {
+  chunks?: Array<{
+    id: string;
+    content: string;
+    metadata?: RagieMetadata;
+  }>;
+}
+
+export interface CreateDocumentRawParams {
+  data: {
+    content: string;
+    metadata?: RagieMetadata;
   };
 }
 
-export interface RagieRetrievalResponse {
-  results: {
-    content: string;
-    score: number;
-    metadata: DocumentMetadata;
-  }[];
+export interface PatchDocumentMetadataRequest {
+  documentId: string;
+  patchDocumentMetadataParams: {
+    metadata: RagieMetadata;
+  };
 }
 
-export interface RagieGenerateRequest extends RagieRetrievalRequest {
-  model?: string;
-  temperature?: number;
-  maxTokens?: number;
-}
-
-export interface RagieGenerateResponse {
+export interface RetrievalChunk {
+  id: string;
   content: string;
-  sources: {
-    content: string;
-    score: number;
-    metadata: DocumentMetadata;
-  }[];
-}
-
-export interface ScoredChunk {
-  content: string;
-  score: number;
-  metadata?: Record<string, unknown>;
+  metadata?: RagieMetadata;
+  score?: number;
 }
 
 export interface RetrievalResponse {
-  scoredChunks: ScoredChunk[];
-}
-
-export interface MessageRole {
-  role: 'user' | 'assistant';
-}
-
-export interface UploadResponse {
-  id: string;
-  status: 'processing' | 'ready' | 'failed';
-  metadata?: {
-    scope?: string;
-    [key: string]: any;
-  };
-}
-
-export interface RagieError {
-  detail: string;
-  status: number;
-}
-
-export interface RagieClient {
-  listDocuments(): Promise<RagieDocument[]>;
-  searchDocuments(query: string, options?: { scope?: string }): Promise<RetrievalResponse>;
-  uploadDocument(file: File, metadata?: Record<string, unknown>): Promise<RagieDocument>;
-  uploadRawDocument(content: string, metadata?: Record<string, unknown>): Promise<RagieDocument>;
-  deleteDocument(id: string): Promise<void>;
-  getDocument(id: string): Promise<RagieDocument>;
-  updateDocumentMetadata(id: string, metadata: Record<string, unknown>): Promise<RagieDocument>;
+  results: RetrievalChunk[];
+  documents?: RagieDocument[];
 } 

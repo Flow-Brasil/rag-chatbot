@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRagieClient } from '@/lib/ragie-client';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import type { RagieClient } from '@/lib/types/ragie';
+import { createRagieClient } from '@/lib/ragie-client';
+import { Ragie } from 'ragie';
+import type { RagieDocument } from '@/lib/types/ragie';
 
 // Configurações de runtime e cache
 export const runtime = 'edge';
@@ -17,17 +18,8 @@ interface Message {
 
 interface RequestData {
   message: string;
-  messages: Message[];
-  data?: {
-    documentId?: string;
-    scope?: string;
-  };
-}
-
-interface ScoredChunk {
-  content: string;
-  score: number;
-  metadata?: Record<string, unknown>;
+  messages?: any[];
+  data?: any;
 }
 
 // Função para validar e retornar chave de API
@@ -59,19 +51,24 @@ function handleRagieError(error: unknown): string {
 }
 
 // Função para buscar documentos relevantes
-async function searchRelevantDocuments(query: string, client: RagieClient) {
+async function searchRelevantDocuments(query: string, client: Ragie) {
   try {
-    const results = await client.searchDocuments(query);
-    if (!results.scoredChunks?.length) return null;
+    const response = await client.retrievals.retrieve({
+      query,
+      filter: {}
+    });
+
+    const chunks = response?.scoredChunks || [];
+    if (chunks.length === 0) return null;
 
     // Filtra apenas os chunks mais relevantes (score > 0.7)
-    const relevantChunks = results.scoredChunks
-      .filter((chunk: ScoredChunk) => chunk.score > 0.7)
+    const relevantChunks = chunks
+      .filter(chunk => chunk.score > 0.7)
       .slice(0, 3); // Limita a 3 chunks mais relevantes
 
     if (!relevantChunks.length) return null;
 
-    return relevantChunks.map((chunk: ScoredChunk) => chunk.content).join('\n\n');
+    return relevantChunks.map(chunk => chunk.text).join('\n\n');
   } catch (error) {
     console.error('Erro ao buscar documentos:', error);
     return null;
@@ -153,11 +150,14 @@ export async function POST(req: NextRequest) {
 
       switch (userIntent.intent) {
         case 'list_docs':
-          const documents = await client.listDocuments();
-          additionalContext = documents.length > 0
-            ? `Documentos disponíveis:\n${documents.map(doc => 
-                `- ${doc.metadata['scope'] || 'Sem escopo'} (${doc.id})`
-              ).join('\n')}`
+          const documents = await client.documents.list({});
+          const firstPage = await documents.next();
+          const docs = firstPage ? [firstPage] : [];
+          additionalContext = docs.length > 0
+            ? `Documentos disponíveis:\n${docs.map((doc: any) => {
+                const metadata = doc.metadata || {};
+                return `- ${metadata.scope || 'Sem escopo'} (${doc.id})`;
+              }).join('\n')}`
             : 'Não há documentos disponíveis no momento.';
           break;
 

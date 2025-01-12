@@ -11,6 +11,17 @@ export function useModelChat(modelType: string = 'gemini') {
     try {
       setIsLoading(true);
       
+      // Verifica se deve sugerir limpar o chat (a cada 10 mensagens)
+      if (messages.length >= 10 && messages.length % 10 === 0 && !options?.error) {
+        const sugestionMessage: Message = {
+          id: Date.now().toString(),
+          content: "💡 Você já tem várias mensagens no chat. Para melhor performance, considere limpar o histórico clicando no botão 'Limpar'.",
+          role: 'assistant',
+          error: true
+        };
+        setMessages(prev => [...prev, sugestionMessage]);
+      }
+
       // Adiciona mensagem do usuário se não for erro
       if (!options?.error) {
         const userMessage: Message = {
@@ -48,6 +59,9 @@ export function useModelChat(modelType: string = 'gemini') {
 
       if (!response.ok) {
         const error = await response.json();
+        if (error.error?.includes('Failed to fetch')) {
+          throw new Error('Não foi possível conectar ao servidor. Por favor, verifique sua conexão com a internet e tente novamente.');
+        }
         throw new Error(error.error || 'Erro ao processar mensagem');
       }
 

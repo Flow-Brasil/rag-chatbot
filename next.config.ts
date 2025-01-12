@@ -32,7 +32,7 @@ const nextConfig = {
   
   // Otimizações de build
   compiler: {
-    removeConsole: process.env.NODE_ENV === "production",
+    removeConsole: process.env['NODE_ENV'] === "production",
   },
 
   // Configurações de segurança
