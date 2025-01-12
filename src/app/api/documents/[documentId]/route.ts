@@ -30,4 +30,33 @@ export async function GET(
       { status: 500 }
     );
   }
+}
+
+export async function DELETE(
+  request: Request,
+  context: { params: { documentId: string } }
+) {
+  const { documentId } = context.params;
+  
+  try {
+    const response = await fetch(`${RAGIE_API_URL}/documents/${documentId}`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${RAGIE_API_KEY}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Ragie API error: ${response.status} ${response.statusText}`);
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting document:", error);
+    return NextResponse.json(
+      { error: "Erro ao deletar documento" },
+      { status: 500 }
+    );
+  }
 } 
