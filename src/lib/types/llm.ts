@@ -1,6 +1,12 @@
-import { Message } from "ai";
-
 export type ModelType = "gemini" | "groq";
+
+export interface Message {
+  id: string;
+  role: string;
+  content: string;
+  timestamp?: number;
+  metadata?: Record<string, unknown>;
+}
 
 export interface LLMConfig {
   apiKey?: string;
@@ -11,8 +17,7 @@ export interface LLMConfig {
 }
 
 export interface LLMResponse {
-  text?: string;
-  content?: string;
+  content: string;
   error?: string;
 }
 

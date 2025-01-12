@@ -1,40 +1,57 @@
-import { groq } from "@ai-sdk/groq";
-import { Message } from "ai";
+import Groq from 'groq-sdk';
+import { LLMModel, Message, LLMResponse } from '@/lib/types/llm';
 
-const SYSTEM_PROMPT = `Você é um assistente profissional e amigável, focado em fornecer respostas precisas e úteis em português do Brasil. Mantenha um tom formal, mas acolhedor.`;
+type ChatRole = 'user' | 'assistant' | 'system';
 
-export function createGroqModel(apiKey: string) {
-  const groqClient = groq.init({
-    apiKey,
-    model: "mixtral-8x7b-32768",
-  });
+interface ChatMessage {
+  role: ChatRole;
+  content: string;
+}
 
-  return {
-    async invoke(messages: Message[]) {
-      try {
-        const systemMessage = messages.find(m => m.role === "system")?.content || SYSTEM_PROMPT;
-        const chatMessages = messages
-          .filter(m => m.role !== "system")
-          .map(m => ({
-            role: m.role,
-            content: m.content,
-          }));
+export class GroqModel implements LLMModel {
+  private client: Groq;
 
-        const response = await groqClient.chat.completions.create({
-          messages: [
-            { role: "system", content: systemMessage },
-            ...chatMessages,
-          ],
-          temperature: 0.7,
-          max_tokens: 1000,
-          stream: true,
-        });
+  constructor(apiKey: string) {
+    this.client = new Groq({
+      apiKey,
+      dangerouslyAllowBrowser: true
+    });
+  }
 
-        return response;
-      } catch (error) {
-        console.error("Error in GROQ model:", error);
-        throw error;
+  async invoke(messages: Message[]): Promise<LLMResponse> {
+    try {
+      // Preparar mensagens para o formato do Groq
+      const formattedMessages: ChatMessage[] = messages.map(m => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.content
+      }));
+
+      // Fazer a chamada para a API do Groq
+      const completion = await this.client.chat.completions.create({
+        messages: formattedMessages,
+        model: "mixtral-8x7b-32768",
+        temperature: 0.7,
+        max_tokens: 2048,
+        stream: false
+      });
+
+      // Extrair a resposta
+      const response = completion.choices[0]?.message?.content;
+
+      if (!response) {
+        throw new Error('Resposta vazia do modelo');
       }
+
+      return {
+        content: response,
+        error: undefined
+      };
+    } catch (error) {
+      console.error('Erro ao chamar Groq:', error);
+      return {
+        content: '',
+        error: error instanceof Error ? error.message : 'Erro desconhecido'
+      };
     }
-  };
+  }
 } 

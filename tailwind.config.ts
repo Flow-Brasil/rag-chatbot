@@ -7,6 +7,9 @@ const config: Config = {
   content: [
     "./src/**/*.{js,ts,jsx,tsx,mdx}",
     "./node_modules/@nextui-org/theme/dist/**/*.{js,ts,jsx,tsx}",
+    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     container: {
@@ -36,6 +39,29 @@ const config: Config = {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
       },
+      typography: {
+        DEFAULT: {
+          css: {
+            table: {
+              borderCollapse: 'collapse',
+              width: '100%',
+              margin: '1rem 0',
+            },
+            'th,td': {
+              border: '1px solid #e5e7eb',
+              padding: '0.5rem 1rem',
+              textAlign: 'left',
+            },
+            th: {
+              backgroundColor: '#f9fafb',
+              fontWeight: '600',
+            },
+            'tr:nth-child(even)': {
+              backgroundColor: '#f9fafb',
+            },
+          },
+        },
+      },
     },
   },
   plugins: [
@@ -50,6 +76,7 @@ const config: Config = {
       },
     }),
     require("tailwindcss-animate"),
+    require('@tailwindcss/typography'),
   ],
 };
 

@@ -25,8 +25,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <head />
-      <body className={`${GeistSans.variable} ${GeistMono.variable} font-sans antialiased min-h-screen`}>
+      <head>
+        <meta name="next-size-adjust" />
+      </head>
+      <body 
+        className={`${GeistSans.variable} ${GeistMono.variable} font-sans antialiased min-h-screen pt-12`}
+        suppressHydrationWarning
+      >
         <AppProvider>{children}</AppProvider>
       </body>
     </html>

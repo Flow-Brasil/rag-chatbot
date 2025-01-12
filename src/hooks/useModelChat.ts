@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { Message } from "ai";
-import { LLMFactory } from "@/lib/llm/factory";
-import { ModelType } from "@/lib/types/llm";
-import { formatChatMessage } from "@/lib/utils/chat";
+import { useState, useEffect } from 'react';
+import { ModelType, Message, LLMResponse } from '@/lib/types/llm';
+import { LLMFactory } from '@/lib/llm/factory';
+import { MediaFile } from '@/lib/types/media';
 
 interface UseModelChatProps {
   modelType: ModelType;
@@ -12,79 +11,101 @@ interface UseModelChatProps {
   onError?: (error: string) => void;
 }
 
-export function useModelChat({ 
-  modelType, 
-  apiKey,
-  onError 
-}: UseModelChatProps) {
+export function useModelChat({ modelType, apiKey, onError }: UseModelChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isModelReady, setIsModelReady] = useState(false);
+  const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
 
-  // Memoize model creation to prevent infinite updates
-  const model = useMemo(() => {
-    try {
-      if (!apiKey) return null;
-      return LLMFactory.createModel(modelType, apiKey);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Erro ao inicializar o modelo";
-      onError?.(errorMessage);
-      return null;
-    }
-  }, [modelType, apiKey, onError]);
-
-  // Update model ready state when model changes
+  // Carrega mensagens do localStorage ao iniciar
   useEffect(() => {
-    setIsModelReady(!!model);
-    setError(null);
-  }, [model]);
-
-  const sendMessage = useCallback(async (content: string) => {
-    if (!model || !isModelReady) {
-      const errorMessage = "Modelo não está pronto. Verifique a API key e tente novamente.";
-      setError(errorMessage);
-      onError?.(errorMessage);
-      return;
+    const savedMessages = localStorage.getItem('chat_messages');
+    if (savedMessages) {
+      try {
+        setMessages(JSON.parse(savedMessages));
+      } catch (err) {
+        console.error('Erro ao carregar mensagens:', err);
+      }
     }
+  }, []);
+
+  // Salva mensagens no localStorage quando atualizadas
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem('chat_messages', JSON.stringify(messages));
+    }
+  }, [messages]);
+
+  const sendMessage = async (content: string, files?: MediaFile[]) => {
+    if (!content.trim() && (!files || files.length === 0)) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      // Adiciona a mensagem do usuário
-      const userMessage = formatChatMessage("user", content);
+      // Preparar conteúdo com mídia
+      let messageContent = content;
+
+      if (files && files.length > 0) {
+        const mediaPromises = files.map(async (file) => {
+          const reader = new FileReader();
+          return new Promise<string>((resolve) => {
+            reader.onloadend = () => {
+              const base64 = reader.result as string;
+              resolve(`[${file.type.toUpperCase()}]${base64}`);
+            };
+            reader.readAsDataURL(file.file);
+          });
+        });
+
+        const mediaBase64 = await Promise.all(mediaPromises);
+        messageContent += '\n' + mediaBase64.join('\n');
+      }
+
+      // Adiciona mensagem do usuário
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: 'user',
+        content: messageContent,
+        timestamp: Date.now()
+      };
+
       setMessages(prev => [...prev, userMessage]);
 
-      // Envia para o modelo
+      // Cria o modelo usando a factory
+      const model = LLMFactory.createModel(modelType, apiKey);
+
+      // Envia a mensagem
       const response = await model.invoke([...messages, userMessage]);
 
       if (response.error) {
-        setError(response.error);
-        onError?.(response.error);
-        return;
+        throw new Error(response.error);
       }
 
-      if (!response.content) {
-        throw new Error("Resposta vazia do modelo");
-      }
+      // Adiciona resposta do assistente
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: response.content,
+        timestamp: Date.now()
+      };
 
-      // Adiciona a resposta do assistente
-      const assistantMessage = formatChatMessage("assistant", response.content);
       setMessages(prev => [...prev, assistantMessage]);
+      setMediaFiles([]); // Limpa arquivos após envio
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Erro ao processar mensagem";
+      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
       setError(errorMessage);
       onError?.(errorMessage);
     } finally {
       setIsLoading(false);
     }
-  }, [model, messages, onError, isModelReady]);
+  };
 
-  const clearMessages = useCallback(() => {
+  const clearMessages = () => {
     setMessages([]);
-    setError(null);
-  }, []);
+    setMediaFiles([]);
+    localStorage.removeItem('chat_messages');
+  };
 
   return {
     messages,
@@ -92,6 +113,7 @@ export function useModelChat({
     error,
     sendMessage,
     clearMessages,
-    isModelReady
+    mediaFiles,
+    setMediaFiles
   };
 } 

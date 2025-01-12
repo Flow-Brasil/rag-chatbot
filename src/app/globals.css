@@ -135,3 +135,29 @@
 .pause-scroll-button.paused .play-icon {
   display: block;
 }
+
+@layer components {
+  .prose table {
+    @apply w-full border-collapse bg-white dark:bg-gray-800;
+  }
+
+  .prose thead {
+    @apply bg-gray-100 dark:bg-gray-700;
+  }
+
+  .prose th {
+    @apply px-4 py-2 text-left font-bold text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600;
+  }
+
+  .prose td {
+    @apply px-4 py-2 text-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-600;
+  }
+
+  .prose tr:nth-child(even) {
+    @apply bg-gray-50 dark:bg-gray-700/50;
+  }
+
+  .prose tr:hover {
+    @apply bg-gray-100 dark:bg-gray-700;
+  }
+}
