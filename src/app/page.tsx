@@ -1,13 +1,13 @@
 "use client";
 
-import { BaseLayout } from "@/components/layout/BaseLayout";
-import { ModelChat } from "@/components/features/ModelChat";
+import { BaseLayout } from '@/components/layout/BaseLayout';
+import ModelChat from '@/components/ModelChat';
 
-export default function HomePage() {
+export default function Home() {
   return (
     <BaseLayout>
       <div className="container mx-auto">
-        <ModelChat defaultModel="gemini" />
+        <ModelChat modelType="gemini" />
       </div>
     </BaseLayout>
   );

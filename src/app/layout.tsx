@@ -1,21 +1,13 @@
 import type { Metadata } from "next";
-import { GeistSans, GeistMono } from "geist/font";
-import { APP_CONFIG } from "@/lib/config/constants";
-import { AppProvider } from "@/providers/app-provider";
-
+import { Inter } from "next/font/google";
 import "./globals.css";
+import { ThemeProvider } from "@/components/custom/theme-provider";
+
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: APP_CONFIG.name,
-  description: APP_CONFIG.description,
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-  },
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "white" },
-    { media: "(prefers-color-scheme: dark)", color: "black" },
-  ],
+  title: "AI Chatbot",
+  description: "Um chatbot inteligente para ajudar você",
 };
 
 export default function RootLayout({
@@ -24,15 +16,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
-      <head>
-        <meta name="next-size-adjust" />
-      </head>
-      <body 
-        className={`${GeistSans.variable} ${GeistMono.variable} font-sans antialiased min-h-screen pt-12`}
-        suppressHydrationWarning
-      >
-        <AppProvider>{children}</AppProvider>
+    <html lang="pt-BR">
+      <body className={inter.className}>
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

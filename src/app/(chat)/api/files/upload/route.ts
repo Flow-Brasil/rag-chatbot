@@ -4,66 +4,34 @@ import { z } from "zod";
 
 import { auth } from "@/app/(auth)/auth";
 
-const FileSchema = z.object({
-  file: z
-    .instanceof(File)
-    .refine((file) => file.size <= 5 * 1024 * 1024, {
-      message: "File size should be less than 5MB",
-    })
-    .refine(
-      (file) =>
-        ["image/jpeg", "image/png", "application/pdf"].includes(file.type),
-      {
-        message: "File type should be JPEG, PNG, or PDF",
-      },
-    ),
+const schema = z.object({
+  filename: z.string(),
+  contentType: z.string(),
+  content: z.string(),
 });
 
 export async function POST(request: Request) {
-  const session = await auth();
-
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  if (request.body === null) {
-    return new Response("Request body is empty", { status: 400 });
-  }
-
   try {
-    const formData = await request.formData();
-    const file = formData.get("file") as File;
+    const session = await auth.getSession();
 
-    if (!file) {
-      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const validatedFile = FileSchema.safeParse({ file });
+    const json = await request.json();
+    const body = schema.parse(json);
 
-    if (!validatedFile.success) {
-      const errorMessage = validatedFile.error.errors
-        .map((error) => error.message)
-        .join(", ");
+    const blob = await put(body.filename, Buffer.from(body.content), {
+      contentType: body.contentType,
+      access: "public",
+    });
 
-      return NextResponse.json({ error: errorMessage }, { status: 400 });
-    }
-
-    const filename = file.name;
-    const fileBuffer = await file.arrayBuffer();
-
-    try {
-      const data = await put(`${filename}`, fileBuffer, {
-        access: "public",
-      });
-
-      return NextResponse.json(data);
-    } catch (error) {
-      return NextResponse.json({ error: "Upload failed" }, { status: 500 });
-    }
+    return NextResponse.json(blob);
   } catch (error) {
+    console.error("Error uploading file:", error);
     return NextResponse.json(
-      { error: "Failed to process request" },
-      { status: 500 },
+      { error: "Error uploading file" },
+      { status: 500 }
     );
   }
 }

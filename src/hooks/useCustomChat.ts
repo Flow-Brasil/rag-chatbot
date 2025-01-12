@@ -29,7 +29,7 @@ export function useCustomChat({ initialMessages = [], id }: UseCustomChatProps =
   const { selectedModel, getModelOptions } = useModelSelection();
 
   const handleSubmit = useCallback(
-    async (e: React.FormEvent<HTMLFormElement>) => {
+    async (e: React.FormEvent<Element>) => {
       e.preventDefault();
 
       if (!input.trim()) {
@@ -69,7 +69,7 @@ export function useCustomChat({ initialMessages = [], id }: UseCustomChatProps =
         }
 
         // Processa mensagens normais
-        await chatSubmit(e, {
+        await chatSubmit(e as React.FormEvent<HTMLFormElement>, {
           data: modelOptions
         });
       } catch (error) {

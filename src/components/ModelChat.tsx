@@ -7,7 +7,7 @@ interface ModelChatProps {
   modelType?: string;
 }
 
-export function ModelChat({ modelType = 'gemini' }: ModelChatProps) {
+export default function ModelChat({ modelType = 'gemini' }: ModelChatProps) {
   const [input, setInput] = useState('');
   const { messages, sendMessage, clearMessages, isLoading } = useModelChat(modelType);
   const { processCommand, isProcessing } = useRagieCommands();
@@ -22,7 +22,11 @@ export function ModelChat({ modelType = 'gemini' }: ModelChatProps) {
     if (currentInput.startsWith('/')) {
       try {
         const response = await processCommand(currentInput);
-        await sendMessage(response, { role: 'assistant' });
+        if (response) {
+          await sendMessage(response, { role: 'assistant' });
+        } else {
+          toast.error('Comando não retornou resposta');
+        }
       } catch (error) {
         console.error('Erro ao processar comando:', error);
         toast.error('Erro ao processar comando');

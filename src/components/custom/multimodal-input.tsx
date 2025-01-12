@@ -9,7 +9,7 @@ import { toast } from "sonner";
 interface Props {
   input: string;
   setInput: (value: string) => void;
-  handleSubmit: (e: React.FormEvent) => void;
+  handleSubmit: (e: React.FormEvent<Element>) => void;
   isLoading?: boolean;
   messages?: any[];
   setMessages?: (messages: any[]) => void;
@@ -120,7 +120,13 @@ export function MultimodalInput({
     try {
       const currentInput = input;
       setInput("/docs");
-      await handleSubmit(new Event("submit", { bubbles: true, cancelable: true }) as unknown as React.FormEvent);
+      const form = document.createElement('form');
+      const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+      const formEvent = Object.assign(submitEvent, {
+        target: form,
+        currentTarget: form
+      }) as unknown as React.FormEvent<HTMLFormElement>;
+      await handleSubmit(formEvent);
       setInput(currentInput);
     } finally {
       setIsProcessing(false);
@@ -173,7 +179,7 @@ export function MultimodalInput({
     setShowApiKeyInput(false);
   };
 
-  const handleSubmitForm = (e: React.FormEvent) => {
+  const handleSubmitForm = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     handleSubmit(e);
   };
@@ -193,7 +199,13 @@ export function MultimodalInput({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    handleSubmitForm(e);
+                    const form = document.createElement('form');
+                    const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+                    const formEvent = Object.assign(submitEvent, {
+                      target: form,
+                      currentTarget: form
+                    }) as unknown as React.FormEvent<HTMLFormElement>;
+                    handleSubmitForm(formEvent);
                   }
                 }}
                 placeholder="Digite sua mensagem..."
