@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Message as AIMessage } from "ai";
 import { Message } from "./message";
 import { MultimodalInput } from "./multimodal-input";
 import { useCustomChat } from "@/hooks/useCustomChat";
 import { Loader2 } from "lucide-react";
+import { ErrorMessage } from "./error-message";
 
 interface ChatProps {
   id?: string;
@@ -21,10 +22,12 @@ export function Chat({ id, initialMessages = [] }: ChatProps) {
     setInput,
     isLoading,
     stop,
-    setMessages
+    setMessages,
+    error
   } = useCustomChat();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -33,6 +36,15 @@ export function Chat({ id, initialMessages = [] }: ChatProps) {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    if (error) {
+      setLastError(error);
+      // Limpa o erro após 5 segundos
+      const timer = setTimeout(() => setLastError(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   const handleRestore = () => {
     // Limpa as mensagens
@@ -49,6 +61,7 @@ export function Chat({ id, initialMessages = [] }: ChatProps) {
           localStorage.setItem("chatHistory", JSON.stringify(parsedHistory));
         } catch (error) {
           console.error("Erro ao limpar histórico:", error);
+          setLastError("Erro ao limpar histórico do chat");
         }
       }
     }
@@ -57,6 +70,11 @@ export function Chat({ id, initialMessages = [] }: ChatProps) {
   return (
     <div className="flex h-screen flex-col">
       <div className="flex-1 overflow-y-auto p-4">
+        {lastError && (
+          <div className="mb-4">
+            <ErrorMessage error={lastError} />
+          </div>
+        )}
         {messages.map((message) => (
           <Message key={message.id} {...message} />
         ))}

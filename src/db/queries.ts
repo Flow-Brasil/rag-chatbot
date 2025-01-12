@@ -43,20 +43,24 @@ export async function deleteChat(id: string) {
 }
 
 export async function getChatById(id: string) {
-  return prisma.chat.findUnique({
-    where: { id },
-    include: {
-      messages: true,
-    },
-  });
+  try {
+    return prisma.chat.findUnique({
+      where: { id },
+      include: {
+        messages: true,
+      },
+    });
+  } catch (error) {
+    console.error("Error in getChatById:", error);
+    throw error;
+  }
 }
 
-export async function getChatsByUserId(userId: string) {
-  return prisma.chat.findMany({
-    where: { userId },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      messages: true,
-    },
-  });
+export async function getChatsByUserId() {
+  try {
+    return [];
+  } catch (error) {
+    console.error("Error in getChatsByUserId:", error);
+    throw error;
+  }
 } 

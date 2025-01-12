@@ -1,28 +1,38 @@
 "use client";
 
-import { Message as AIMessage } from "ai";
+import { type Message as AIMessage } from "ai";
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
+import { AlertTriangle } from "lucide-react";
 
-type ModelType = 'groq' | 'gemini';
+type ModelType = 'gemini';
 
 interface MessageProps extends Omit<AIMessage, 'model'> {
   model?: ModelType;
   id: string;
+  error?: boolean;
 }
 
-export function Message({ role, content, model, id }: MessageProps) {
+export function Message({ role, content, model, id, error }: MessageProps) {
   const isDocsCommand = role === "assistant" && content.includes("📚 **Documentos");
+  const isError = error || (role === "assistant" && content.toLowerCase().includes("erro"));
 
   return (
     <div
       className={cn(
         "flex flex-col gap-2 p-4 whitespace-pre-wrap",
         role === "user" ? "bg-gray-100" : "bg-white",
-        isDocsCommand && "bg-blue-50 font-mono text-sm"
+        isDocsCommand && "bg-blue-50 font-mono text-sm",
+        isError && "bg-red-50 border-l-4 border-red-400"
       )}
       key={id}
     >
+      {isError && role === "assistant" && (
+        <div className="flex items-center gap-2 text-red-600 mb-2">
+          <AlertTriangle className="w-5 h-5" />
+          <span className="font-medium">Ocorreu um erro</span>
+        </div>
+      )}
       <ReactMarkdown
         components={{
           pre: ({ node, ...props }) => (

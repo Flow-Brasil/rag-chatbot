@@ -2,8 +2,6 @@ import { put } from "@vercel/blob";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { auth } from "@/app/(auth)/auth";
-
 const schema = z.object({
   filename: z.string(),
   contentType: z.string(),
@@ -12,12 +10,6 @@ const schema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const session = await auth.getSession();
-
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const json = await request.json();
     const body = schema.parse(json);
 
