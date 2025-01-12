@@ -1,4 +1,4 @@
-import { type Message, type CreateMessage } from "ai";
+import { type Message } from "ai";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -165,3 +165,15 @@ export function getTitleFromChat(chat: Chat) {
 
   return firstMessage.content;
 }
+
+// Exportando tipos
+export type { 
+  ToolInvocation,
+  ExtendedMessage,
+  CoreMessage,
+  Chat,
+  ApplicationError
+}; 
+
+// Exportando funções de LLM
+export * from './llm'; 

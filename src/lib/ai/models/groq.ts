@@ -62,6 +62,4 @@ export function createGroqModel(apiKey: string) {
       }
     },
   };
-}
-
-export { createGeminiModel } from "./gemini";
+} 

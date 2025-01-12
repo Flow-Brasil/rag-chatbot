@@ -9,7 +9,15 @@ export function useRagieCommands() {
     setIsProcessing(true);
     try {
       console.log('🤖 Processando comando:', command);
-      const client = createRagieClient(process.env.NEXT_PUBLIC_RAGIE_API_KEY || '');
+      
+      const apiKey = process.env.NEXT_PUBLIC_RAGIE_API_KEY;
+      if (!apiKey) {
+        console.error('❌ API key não configurada');
+        throw new Error('API key do Ragie não configurada');
+      }
+
+      console.log('🔑 Usando API key:', apiKey.substring(0, 8) + '...');
+      const client = createRagieClient(apiKey);
 
       if (command === '/docs') {
         console.log('📚 Listando documentos...');
@@ -78,7 +86,15 @@ O escopo é opcional e ajuda a organizar seus documentos.`;
 - /upload-raw [escopo] [conteúdo] - Envia texto como documento`;
 
     } catch (error) {
-      console.error('❌ Erro ao processar comando:', error);
+      console.error('❌ Erro ao processar comando:', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error,
+        command
+      });
+      
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
       return `Erro ao processar comando: ${errorMessage}`;
     } finally {

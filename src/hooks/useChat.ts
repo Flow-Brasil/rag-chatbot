@@ -1,7 +1,7 @@
 import { Message } from "ai";
 import { useChat as useVercelChat } from "ai/react";
 import { useCallback, useEffect, useState } from "react";
-import { useModelSelection } from "./useModelSelection";
+import { useModelSelection } from "../../hooks/useModelSelection";
 import { toast } from "sonner";
 
 export function useCustomChat() {

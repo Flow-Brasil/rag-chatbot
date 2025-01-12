@@ -1,31 +1,68 @@
-import { useState, useEffect, useCallback } from 'react';
-import { ModelType } from '@/lib/types/llm';
-import { toast } from 'sonner';
+"use client";
 
-// Valores padrão das API keys
-const DEFAULT_GEMINI_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "AIzaSyCDaK960WJ3_rWHTN2SzLaSKz20oekflCE";
-const DEFAULT_GROQ_KEY = process.env.NEXT_PUBLIC_GROQ_API_KEY || "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";
-const DEFAULT_RAGIE_KEY = process.env.NEXT_PUBLIC_RAGIE_API_KEY || "tnt_46Qnib7kZaD_Ifcd9HQUauLIooSdXSRwIvfvMU04gsKhlbHxPg51YvA";
+import { useState, useCallback, useEffect } from "react";
+import { toast } from "sonner";
+
+export type ModelType = 'groq' | 'gemini';
+
+// Lê as chaves de API das variáveis de ambiente
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 
 export function useModelSelection() {
-  const [selectedModel, setSelectedModel] = useState<ModelType>('gemini');
-  const [geminiKey, setGeminiKey] = useState(DEFAULT_GEMINI_KEY);
-  const [groqKey, setGroqKey] = useState(DEFAULT_GROQ_KEY);
-  const [ragieKey, setRagieKey] = useState(DEFAULT_RAGIE_KEY);
+  const [selectedModel, setSelectedModel] = useState<ModelType>('groq');
+  const [geminiKey, setGeminiKey] = useState(GEMINI_API_KEY);
+  const [groqKey, setGroqKey] = useState(GROQ_API_KEY);
+  const [showGeminiEdit, setShowGeminiEdit] = useState(false);
+  const [showGroqEdit, setShowGroqEdit] = useState(false);
 
   // Carrega as configurações do localStorage após a montagem do componente
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const storedModel = localStorage.getItem('selectedModel') as ModelType;
-      const storedGeminiKey = localStorage.getItem('gemini_api_key');
-      const storedGroqKey = localStorage.getItem('groq_api_key');
-      const storedRagieKey = localStorage.getItem('ragie_api_key');
+      const storedGeminiKey = localStorage.getItem('geminiKey');
+      const storedGroqKey = localStorage.getItem('groqKey');
 
       if (storedModel) setSelectedModel(storedModel);
       if (storedGeminiKey) setGeminiKey(storedGeminiKey);
       if (storedGroqKey) setGroqKey(storedGroqKey);
-      if (storedRagieKey) setRagieKey(storedRagieKey);
     }
+  }, []);
+
+  const handleGeminiKeyChange = useCallback((key: string) => {
+    setGeminiKey(key);
+  }, []);
+
+  const handleGroqKeyChange = useCallback((key: string) => {
+    setGroqKey(key);
+  }, []);
+
+  const handleGeminiKeyConfirm = useCallback(() => {
+    if (geminiKey.length < 10) {
+      toast.error('Chave API Gemini inválida');
+      return;
+    }
+    localStorage.setItem('geminiKey', geminiKey);
+    setShowGeminiEdit(false);
+    toast.success('Chave API Gemini salva com sucesso');
+  }, [geminiKey]);
+
+  const handleGroqKeyConfirm = useCallback(() => {
+    if (groqKey.length < 10) {
+      toast.error('Chave API Groq inválida');
+      return;
+    }
+    localStorage.setItem('groqKey', groqKey);
+    setShowGroqEdit(false);
+    toast.success('Chave API Groq salva com sucesso');
+  }, [groqKey]);
+
+  const toggleGeminiEdit = useCallback(() => {
+    setShowGeminiEdit(prev => !prev);
+  }, []);
+
+  const toggleGroqEdit = useCallback(() => {
+    setShowGroqEdit(prev => !prev);
   }, []);
 
   const handleModelClick = useCallback((model: ModelType) => {
@@ -35,19 +72,24 @@ export function useModelSelection() {
   }, []);
 
   const getModelOptions = useCallback(() => {
-    const apiKey = selectedModel === 'gemini' ? geminiKey : groqKey;
     return {
       model: selectedModel,
-      apiKey,
-      ragieKey
-    };
-  }, [selectedModel, geminiKey, groqKey, ragieKey]);
+      ...(selectedModel === 'gemini' ? { geminiKey } : { groqKey })
+    } as Record<string, string>;
+  }, [selectedModel, geminiKey, groqKey]);
 
   return {
     selectedModel,
     geminiKey,
     groqKey,
-    ragieKey,
+    showGeminiEdit,
+    showGroqEdit,
+    handleGeminiKeyChange,
+    handleGroqKeyChange,
+    handleGeminiKeyConfirm,
+    handleGroqKeyConfirm,
+    toggleGeminiEdit,
+    toggleGroqEdit,
     handleModelClick,
     getModelOptions
   };

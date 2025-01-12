@@ -1,7 +1,6 @@
 import { RagieDocument, RetrievalResponse, UploadResponse } from "./types/ragie";
 
-const RAGIE_API_URL = process.env.NEXT_PUBLIC_RAGIE_API_URL?.replace(/\/$/, '') || "https://api.ragie.ai";
-const RAGIE_API_KEY = process.env.NEXT_PUBLIC_RAGIE_API_KEY || "";
+const RAGIE_API_URL = process.env.NEXT_PUBLIC_RAGIE_API_URL || "https://api.ragie.tech";
 
 interface RagieListResponse {
   pagination: {
@@ -23,104 +22,78 @@ interface RagieListResponse {
 export class RagieClient {
   private apiKey: string;
 
-  constructor(apiKey: string = RAGIE_API_KEY) {
+  constructor(apiKey: string) {
     if (!apiKey) {
+      console.error('❌ API key não fornecida');
       throw new Error('API key do Ragie não configurada');
     }
+    console.log('🔑 API key configurada:', apiKey.substring(0, 8) + '...');
     this.apiKey = apiKey;
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     try {
-      if (!this.apiKey) {
-        throw new Error('API key do Ragie não configurada');
+      const apiKey = process.env.NEXT_PUBLIC_RAGIE_API_KEY;
+      if (!apiKey) {
+        throw new Error('API key não configurada');
       }
 
-      const headers: Record<string, string> = {
+      console.log('🔑 Usando API key:', apiKey.substring(0, 8) + '...');
+      console.log('🌐 URL:', `${RAGIE_API_URL}${endpoint}`);
+      console.log('📡 Método:', options.method || 'GET');
+
+      const headers = new Headers({
         'Accept': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-      };
+        'Authorization': `Bearer ${apiKey}`,
+      });
 
-      // Só adiciona Content-Type se não for FormData
+      // Adiciona Content-Type apenas se não for FormData
       if (!(options.body instanceof FormData)) {
-        headers['Content-Type'] = 'application/json';
+        headers.append('Content-Type', 'application/json');
       }
 
-      const url = `${RAGIE_API_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-      console.log('📡 Enviando requisição para API:', {
-        url,
-        method: options.method || 'GET',
-        headers: {
-          ...headers,
-          Authorization: 'Bearer [REDACTED]', // Não loga a chave
-        },
-        body: options.body instanceof FormData ? '[FormData]' : options.body,
+      const response = await fetch(`${RAGIE_API_URL}${endpoint}`, {
+        ...options,
+        headers,
       });
 
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          ...headers,
-          ...options.headers,
-        },
-      });
+      console.log('📥 Status:', response.status);
+      console.log('📝 Headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
         const errorText = await response.text();
-        let errorMessage = response.statusText;
-        try {
-          const error = JSON.parse(errorText);
-          errorMessage = error.detail || error.message || errorMessage;
-        } catch {
-          // Se não conseguir parsear o JSON, usa o texto da resposta
-          errorMessage = errorText || errorMessage;
-        }
-        console.error('❌ Erro na resposta da API:', {
+        console.error('❌ Erro na resposta:', {
           status: response.status,
           statusText: response.statusText,
-          errorMessage,
-          url,
-          method: options.method || 'GET',
+          body: errorText
         });
-        throw new Error(`Erro na API do Ragie (${response.status}): ${errorMessage}`);
+        throw new Error(`Erro na API do Ragie: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
-      const data = await response.json();
-      console.log('✅ Resposta da API:', {
-        url,
-        method: options.method || 'GET',
-        data
-      });
+      const data = await response.json() as T;
+      console.log('✅ Resposta:', data);
       return data;
-    } catch (error) {
-      console.error('❌ Erro na requisição:', {
-        error,
-        endpoint,
-        method: options.method || 'GET',
-        url: `${RAGIE_API_URL}${endpoint}`,
-      });
+    } catch (error: unknown) {
       if (error instanceof Error) {
-        throw new Error(`Falha ao acessar API do Ragie: ${error.message}`);
+        console.error('❌ Erro na requisição:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
+      } else {
+        console.error('❌ Erro desconhecido:', error);
       }
-      throw new Error('Erro desconhecido ao acessar a API do Ragie');
+      throw error;
     }
   }
 
   async listDocuments(): Promise<RagieDocument[]> {
     try {
-      console.log('📋 Listando documentos...');
-      const response = await this.request<RagieListResponse>("/documents");
-      console.log('📚 Documentos encontrados:', response.documents.length);
-      
-      // Converte o formato da API para o formato esperado pela aplicação
-      return response.documents.map(doc => ({
-        id: doc.id,
-        name: doc.name,
-        metadata: doc.metadata,
-        status: doc.status as 'processing' | 'ready' | 'failed',
-        createdAt: doc.created_at,
-        updatedAt: doc.updated_at,
-      }));
+      console.log('📚 Listando documentos...');
+      const response = await this.request<{ documents: RagieDocument[] }>('/documents');
+      const documents = response.documents;
+      console.log(`📋 ${documents.length} documentos encontrados`);
+      return documents;
     } catch (error) {
       console.error('❌ Erro ao listar documentos:', error);
       throw error;
@@ -265,6 +238,6 @@ export class RagieClient {
   }
 }
 
-export function createRagieClient(apiKey: string = RAGIE_API_KEY) {
+export function createRagieClient(apiKey: string) {
   return new RagieClient(apiKey);
 } 
