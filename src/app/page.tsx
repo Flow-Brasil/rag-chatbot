@@ -28,6 +28,13 @@ export default function Home() {
           Chat Geral
         </Button>
         <Button 
+          onClick={() => router.push("/chat/clientes")}
+          className="text-lg px-8 py-6"
+          variant="outline"
+        >
+          Chat Clientes
+        </Button>
+        <Button 
           onClick={() => router.push("/gerenciador")}
           className="text-lg px-8 py-6"
           variant="secondary"

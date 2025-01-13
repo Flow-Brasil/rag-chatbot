@@ -21,6 +21,13 @@ export default function Navigation() {
           Início
         </Link>
         <Link
+          href="/chat/clientes"
+          className={`flex items-center px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isActive('/chat/clientes')}`}
+        >
+          <span className="material-icons mr-2">chat</span>
+          Chat Clientes
+        </Link>
+        <Link
           href="/gerenciador/clientes"
           className={`flex items-center px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isActive('/gerenciador/clientes')}`}
         >
