@@ -136,18 +136,37 @@ export default function UploadPage() {
             <label className="block text-sm font-medium mb-2">Cliente</label>
             <Autocomplete
               allowsCustomValue
-              placeholder="Selecione ou adicione um cliente"
+              placeholder="Digite para buscar ou adicionar um cliente"
               defaultItems={clientes}
               value={metadata.cliente}
-              onInputChange={(value) => setMetadata(prev => ({ ...prev, cliente: value }))}
+              onInputChange={(value) => {
+                setMetadata(prev => ({ ...prev, cliente: value }));
+              }}
               className="w-full"
+              endContent={
+                metadata.cliente && !clientes.some(c => c.name === metadata.cliente) ? (
+                  <div className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">
+                    Novo Cliente
+                  </div>
+                ) : null
+              }
             >
               {(cliente) => (
-                <AutocompleteItem key={cliente.name} value={cliente.name}>
-                  {cliente.name} ({cliente.documentCount} doc{cliente.documentCount !== 1 ? 's' : ''})
+                <AutocompleteItem key={cliente.name} textValue={cliente.name}>
+                  <div className="flex justify-between items-center">
+                    <span>{cliente.name}</span>
+                    <span className="text-sm text-gray-500">
+                      {cliente.documentCount} doc{cliente.documentCount !== 1 ? 's' : ''}
+                    </span>
+                  </div>
                 </AutocompleteItem>
               )}
             </Autocomplete>
+            {metadata.cliente && !clientes.some(c => c.name === metadata.cliente) && (
+              <p className="text-sm text-blue-600 mt-1">
+                Será criado um novo cliente: {metadata.cliente}
+              </p>
+            )}
           </div>
 
           {/* Botão de envio */}
