@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+import { Upload } from "lucide-react";
 
 export default function Home() {
   const router = useRouter();
@@ -32,6 +33,13 @@ export default function Home() {
           variant="secondary"
         >
           Gerenciador de Arquivos
+        </Button>
+        <Button 
+          onClick={() => router.push("/gerenciador/upload")}
+          className="text-lg px-8 py-6 bg-blue-500 hover:bg-blue-600 text-white"
+        >
+          <Upload className="w-5 h-5 mr-2" />
+          Upload de Documento
         </Button>
       </div>
     </main>

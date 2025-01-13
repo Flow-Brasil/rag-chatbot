@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Download, Upload, Trash2 } from "lucide-react";
-import { UploadModal } from "@/components/UploadModal";
+import { useRouter } from "next/navigation";
 
 // Função para formatar data de forma consistente
 function formatDate(dateString: string) {
@@ -26,11 +26,10 @@ interface Document {
 }
 
 export default function GerenciadorPage() {
+  const router = useRouter();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   useEffect(() => {
     fetchDocuments();
@@ -50,32 +49,6 @@ export default function GerenciadorPage() {
       setLoading(false);
     }
   }
-
-  const handleUpload = async (file: File, metadata: Record<string, any>) => {
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("metadata", JSON.stringify(metadata));
-
-      const response = await fetch("/api/documents/upload", {
-        method: "POST",
-        body: formData
-      });
-
-      if (!response.ok) {
-        throw new Error("Erro ao fazer upload do arquivo");
-      }
-
-      await fetchDocuments();
-      setIsUploadModalOpen(false);
-    } catch (err) {
-      console.error("Erro no upload:", err);
-      alert("Erro ao fazer upload do arquivo");
-    } finally {
-      setUploading(false);
-    }
-  };
 
   const handleDownload = async (documentId: string, fileName: string) => {
     try {
@@ -135,11 +108,11 @@ export default function GerenciadorPage() {
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-2xl font-bold">Gerenciador de Arquivos</h1>
         <Button 
-          onClick={() => setIsUploadModalOpen(true)}
+          onClick={() => router.push("/gerenciador/upload")}
           className="cursor-pointer"
         >
           <Upload className="w-4 h-4 mr-2" />
-          Upload
+          Novo Documento
         </Button>
       </div>
 
@@ -191,13 +164,6 @@ export default function GerenciadorPage() {
           </Card>
         ))}
       </div>
-
-      <UploadModal
-        isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
-        onUpload={handleUpload}
-        uploading={uploading}
-      />
     </div>
   );
 } 
