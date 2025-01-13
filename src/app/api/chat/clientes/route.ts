@@ -18,32 +18,18 @@ const model = new ChatGoogleGenerativeAI({
 
 export async function POST(request: Request) {
   try {
-    const { message, history } = await request.json();
+    const { message, history, documentIds } = await request.json();
 
-    console.log("Buscando documentos de clientes...");
-
-    // 1. Primeiro, buscar a lista de documentos
-    const documentsResponse = await fetch(`${RAGIE_API_URL}/documents`, {
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${RAGIE_API_KEY}`
-      }
-    });
-
-    if (!documentsResponse.ok) {
-      throw new Error("Erro ao buscar lista de documentos");
+    if (!documentIds || documentIds.length === 0) {
+      throw new Error("Nenhum documento selecionado");
     }
 
-    const documentsData = await documentsResponse.json();
-    // Filtrar apenas documentos que têm metadata.cliente
-    const documents = (documentsData.documents || []).filter((doc: any) => doc.metadata?.cliente);
-
-    console.log(`Encontrados ${documents.length} documentos de clientes`);
+    console.log("Buscando documentos selecionados...");
 
     // 2. Buscar o conteúdo de cada documento
     const contents = await Promise.all(
-      documents.map(async (doc: any) => {
-        const contentResponse = await fetch(`${RAGIE_API_URL}/documents/${doc.id}/content`, {
+      documentIds.map(async (documentId: string) => {
+        const contentResponse = await fetch(`${RAGIE_API_URL}/documents/${documentId}/content`, {
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${RAGIE_API_KEY}`
@@ -51,24 +37,39 @@ export async function POST(request: Request) {
         });
 
         if (!contentResponse.ok) {
-          console.warn(`Erro ao buscar conteúdo do documento ${doc.id}`);
+          console.warn(`Erro ao buscar conteúdo do documento ${documentId}`);
           return null;
         }
 
+        // Buscar informações do documento
+        const documentResponse = await fetch(`${RAGIE_API_URL}/documents/${documentId}`, {
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${RAGIE_API_KEY}`
+          }
+        });
+
+        if (!documentResponse.ok) {
+          console.warn(`Erro ao buscar informações do documento ${documentId}`);
+          return null;
+        }
+
+        const documentInfo = await documentResponse.json();
         const contentData = await contentResponse.json();
+
         try {
           // Tenta fazer parse do conteúdo se for JSON
           const parsedContent = JSON.parse(contentData.content);
           return {
-            name: doc.name,
-            cliente: doc.metadata.cliente,
+            name: documentInfo.name,
+            cliente: documentInfo.metadata?.cliente,
             content: JSON.stringify(parsedContent, null, 2)
           };
         } catch {
           // Se não for JSON, usa o conteúdo como está
           return {
-            name: doc.name,
-            cliente: doc.metadata.cliente,
+            name: documentInfo.name,
+            cliente: documentInfo.metadata?.cliente,
             content: contentData.content
           };
         }
@@ -78,12 +79,16 @@ export async function POST(request: Request) {
     // Filtra documentos que falharam ao buscar
     const validContents = contents.filter(c => c !== null);
 
+    if (validContents.length === 0) {
+      throw new Error("Não foi possível recuperar o conteúdo dos documentos selecionados");
+    }
+
     console.log("Conteúdo dos documentos recuperado, gerando resposta...");
 
     // 3. Criar mensagens para o chat
     const messages = [
       new SystemMessage(
-        `Você é um assistente prestativo que responde perguntas baseando-se no conteúdo dos documentos de clientes fornecidos.
+        `Você é um assistente prestativo que responde perguntas baseando-se no conteúdo dos documentos fornecidos.
          Seja claro e direto nas respostas. Se a informação não estiver disponível nos documentos, indique isso claramente.
          
          Documentos disponíveis:
