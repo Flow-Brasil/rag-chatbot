@@ -22,6 +22,12 @@ interface Message {
   content: string;
 }
 
+interface PendingUpload {
+  content: any;
+  suggestedName: string;
+  awaitingNameConfirmation: boolean;
+}
+
 export default function ChatClientesPage() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -32,6 +38,7 @@ export default function ChatClientesPage() {
   const [clienteDocuments, setClienteDocuments] = useState<Document[]>([]);
   const [selectedDocuments, setSelectedDocuments] = useState<Document[]>([]);
   const [isUploadMode, setIsUploadMode] = useState(false);
+  const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
 
   const loadClienteDocuments = useCallback(async () => {
     if (!selectedCliente) {
@@ -81,6 +88,59 @@ export default function ChatClientesPage() {
     loadClienteDocuments();
   }, [selectedCliente, loadClienteDocuments]);
 
+  // Função para validar o JSON com o agente
+  const validateWithAgent = async (jsonContent: string): Promise<boolean> => {
+    try {
+      // Tenta extrair um JSON válido do texto ou envia o texto como está
+      let contentToSend = jsonContent;
+      try {
+        // Se for um JSON válido, mantém como está
+        JSON.parse(jsonContent);
+      } catch {
+        // Se não for um JSON válido, envia o texto puro para o agente tentar corrigir
+        contentToSend = jsonContent;
+      }
+
+      const response = await fetch("http://localhost:10000/api/documents/validate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          content: contentToSend,
+          cliente: selectedCliente
+        })
+      });
+
+      const data = await response.json();
+      
+      // Adiciona a resposta do agente ao chat
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: data.message
+      }]);
+
+      if (data.success) {
+        // Se o JSON é válido ou foi corrigido, configura o upload pendente
+        setPendingUpload({
+          content: data.data.content,
+          suggestedName: data.data.suggested_name,
+          awaitingNameConfirmation: true
+        });
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error("Erro ao validar documento:", error);
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: "❌ Erro ao validar o documento. Por favor, tente novamente."
+      }]);
+      return false;
+    }
+  };
+
   // Iniciar modo de upload
   const startUploadMode = () => {
     if (!selectedCliente) {
@@ -90,7 +150,7 @@ export default function ChatClientesPage() {
     setIsUploadMode(true);
     setMessages([{
       role: "assistant",
-      content: `Modo de upload ativado para o cliente ${selectedCliente}.\n\nPor favor, envie o conteúdo do documento em formato JSON. O documento será automaticamente associado ao cliente ${selectedCliente}.\n\nExemplo de formato aceito:\n{\n  "titulo": "Nome do Documento",\n  "conteudo": "Texto do documento aqui"\n}`
+      content: `Modo de upload ativado para o cliente ${selectedCliente}.\n\nPor favor, envie o conteúdo do documento. Você pode enviar:\n\n1. Um JSON no formato:\n{\n  "titulo": "Nome do Documento",\n  "conteudo": "Texto do documento aqui"\n}\n\n2. Ou qualquer outro formato de JSON que contenha campos como title, content, text, etc. O agente tentará extrair e formatar automaticamente.`
     }]);
   };
 
@@ -99,6 +159,50 @@ export default function ChatClientesPage() {
       setSelectedDocuments(selectedDocuments.filter(d => d.id !== doc.id));
     } else {
       setSelectedDocuments([...selectedDocuments, doc]);
+    }
+  };
+
+  const processUpload = async (content: any, fileName: string) => {
+    try {
+      // Criar um Blob com o conteúdo JSON
+      const blob = new Blob([JSON.stringify(content, null, 2)], { type: 'application/json' });
+      const file = new File([blob], fileName, { type: 'application/json' });
+      
+      // Criar FormData para upload
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("metadata", JSON.stringify({ cliente: selectedCliente }));
+
+      // Fazer upload do documento
+      const uploadResponse = await fetch("/api/documents/upload", {
+        method: "POST",
+        body: formData
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error("Erro ao fazer upload do documento");
+      }
+
+      // Adicionar mensagem de sucesso
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: `✅ Documento "${fileName}" foi enviado com sucesso!\n\nO documento já está disponível na lista de documentos do cliente.`
+      }]);
+
+      // Recarregar documentos do cliente
+      await loadClienteDocuments();
+      
+      // Limpar estado de upload pendente
+      setPendingUpload(null);
+      
+      // Desativar modo de upload
+      setIsUploadMode(false);
+
+    } catch (error) {
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: "❌ Erro ao fazer upload do documento. Por favor, tente novamente."
+      }]);
     }
   };
 
@@ -113,46 +217,19 @@ export default function ChatClientesPage() {
 
     try {
       if (isUploadMode) {
-        // Tentar fazer parse do JSON
-        try {
-          const jsonContent = JSON.parse(input);
-          
-          // Criar um Blob com o conteúdo JSON
-          const blob = new Blob([JSON.stringify(jsonContent, null, 2)], { type: 'application/json' });
-          const file = new File([blob], `${jsonContent.titulo || 'documento'}.json`, { type: 'application/json' });
-          
-          // Criar FormData para upload
-          const formData = new FormData();
-          formData.append("file", file);
-          formData.append("metadata", JSON.stringify({ cliente: selectedCliente }));
-
-          // Fazer upload do documento
-          const uploadResponse = await fetch("/api/documents/upload", {
-            method: "POST",
-            body: formData
-          });
-
-          if (!uploadResponse.ok) {
-            throw new Error("Erro ao fazer upload do documento");
+        if (pendingUpload?.awaitingNameConfirmation) {
+          // Se estiver aguardando confirmação do nome
+          if (input.toLowerCase() === 'confirmar') {
+            // Usuário confirmou o nome sugerido
+            await processUpload(pendingUpload.content, pendingUpload.suggestedName);
+          } else {
+            // Usuário forneceu um novo nome
+            const newFileName = input.endsWith('.json') ? input : `${input}.json`;
+            await processUpload(pendingUpload.content, newFileName);
           }
-
-          // Adicionar mensagem de sucesso
-          setMessages(prev => [...prev, {
-            role: "assistant",
-            content: `✅ Documento "${jsonContent.titulo || 'documento'}.json" foi enviado com sucesso!\n\nO documento já está disponível na lista de documentos do cliente.`
-          }]);
-
-          // Recarregar documentos do cliente
-          await loadClienteDocuments();
-          
-          // Desativar modo de upload
-          setIsUploadMode(false);
-
-        } catch (error) {
-          setMessages(prev => [...prev, {
-            role: "assistant",
-            content: "❌ Erro: O conteúdo enviado não é um JSON válido. Por favor, verifique o formato e tente novamente."
-          }]);
+        } else {
+          // Primeira etapa: validar JSON com o agente
+          await validateWithAgent(input);
         }
       } else {
         // Modo chat normal
@@ -338,7 +415,9 @@ export default function ChatClientesPage() {
               onChange={(e) => setInput(e.target.value)}
               placeholder={
                 isUploadMode
-                  ? "Cole o conteúdo JSON aqui..."
+                  ? pendingUpload?.awaitingNameConfirmation
+                    ? 'Digite "confirmar" ou forneça um novo nome...'
+                    : "Cole o conteúdo JSON aqui..."
                   : selectedDocuments.length > 0 
                     ? "Digite sua pergunta..." 
                     : "Selecione pelo menos um documento para começar"
