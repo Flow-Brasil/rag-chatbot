@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Trash2, Edit } from "lucide-react";
+import { Download, Upload, Trash2 } from "lucide-react";
 import { UploadModal } from "@/components/UploadModal";
-import { EditDocumentModal } from "@/components/EditDocumentModal";
 
 // Função para formatar data de forma consistente
 function formatDate(dateString: string) {
@@ -30,11 +29,8 @@ export default function GerenciadorPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
 
   useEffect(() => {
     fetchDocuments();
@@ -78,32 +74,6 @@ export default function GerenciadorPage() {
       alert("Erro ao fazer upload do arquivo");
     } finally {
       setUploading(false);
-    }
-  };
-
-  const handleEdit = async (id: string, updates: { name: string; metadata: Record<string, any> }) => {
-    setSaving(true);
-    try {
-      const response = await fetch(`/api/documents/${id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(updates),
-      });
-
-      if (!response.ok) {
-        throw new Error("Erro ao atualizar documento");
-      }
-
-      await fetchDocuments();
-      setIsEditModalOpen(false);
-      setSelectedDocument(null);
-    } catch (err) {
-      console.error("Erro ao editar:", err);
-      alert("Erro ao atualizar documento");
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -152,11 +122,6 @@ export default function GerenciadorPage() {
     }
   };
 
-  const openEditModal = (document: Document) => {
-    setSelectedDocument(document);
-    setIsEditModalOpen(true);
-  };
-
   if (loading) {
     return <div className="container mx-auto p-4">Carregando documentos...</div>;
   }
@@ -184,7 +149,6 @@ export default function GerenciadorPage() {
             <div className="flex justify-between items-start mb-4">
               <div>
                 <h3 className="font-semibold">{doc.name}</h3>
-                <p className="text-sm text-gray-600">Status: {doc.status}</p>
                 <p className="text-sm text-gray-600">
                   Criado em: {formatDate(doc.created_at)}
                 </p>
@@ -218,14 +182,6 @@ export default function GerenciadorPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => openEditModal(doc)}
-                className="text-blue-500 hover:text-blue-700 hover:bg-blue-100"
-              >
-                <Edit className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
                 onClick={() => handleDelete(doc.id)}
                 className="text-red-500 hover:text-red-700 hover:bg-red-100"
               >
@@ -241,17 +197,6 @@ export default function GerenciadorPage() {
         onClose={() => setIsUploadModalOpen(false)}
         onUpload={handleUpload}
         uploading={uploading}
-      />
-
-      <EditDocumentModal
-        isOpen={isEditModalOpen}
-        onClose={() => {
-          setIsEditModalOpen(false);
-          setSelectedDocument(null);
-        }}
-        onSave={handleEdit}
-        document={selectedDocument}
-        saving={saving}
       />
     </div>
   );

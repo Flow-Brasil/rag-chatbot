@@ -14,13 +14,13 @@ export default function Home() {
       </p>
       <div className="flex flex-wrap gap-4 justify-center">
         <Button 
-          onClick={() => router.push("/documentos")}
+          onClick={() => router.push("/chat")}
           className="text-lg px-8 py-6"
         >
           Ver Documentos
         </Button>
         <Button 
-          onClick={() => router.push("/chatgeral")}
+          onClick={() => router.push("/chat/geral")}
           className="text-lg px-8 py-6"
           variant="outline"
         >

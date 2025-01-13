@@ -41,7 +41,7 @@ export default function ChatGeralPage() {
     setLoading(true);
 
     try {
-      const response = await fetch("/api/chatgeral", {
+      const response = await fetch("/api/chat/geral", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
