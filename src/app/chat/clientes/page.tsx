@@ -1,10 +1,10 @@
 "use client";
 
 import React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeftIcon, FileIcon, XIcon } from "lucide-react";
+import { ArrowLeftIcon, FileIcon, XIcon, UploadIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface Document {
@@ -31,6 +31,27 @@ export default function ChatClientesPage() {
   const [selectedCliente, setSelectedCliente] = useState<string | null>(null);
   const [clienteDocuments, setClienteDocuments] = useState<Document[]>([]);
   const [selectedDocuments, setSelectedDocuments] = useState<Document[]>([]);
+  const [isUploadMode, setIsUploadMode] = useState(false);
+
+  const loadClienteDocuments = useCallback(async () => {
+    if (!selectedCliente) {
+      setClienteDocuments([]);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/documents");
+      if (response.ok) {
+        const data = await response.json();
+        const docs = data.documents?.filter(
+          (doc: Document) => doc.metadata?.cliente === selectedCliente
+        ) || [];
+        setClienteDocuments(docs);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar documentos:", error);
+    }
+  }, [selectedCliente]);
 
   // Carregar lista de clientes
   useEffect(() => {
@@ -57,27 +78,21 @@ export default function ChatClientesPage() {
 
   // Carregar documentos do cliente selecionado
   useEffect(() => {
-    async function loadClienteDocuments() {
-      if (!selectedCliente) {
-        setClienteDocuments([]);
-        return;
-      }
-
-      try {
-        const response = await fetch("/api/documents");
-        if (response.ok) {
-          const data = await response.json();
-          const docs = data.documents?.filter(
-            (doc: Document) => doc.metadata?.cliente === selectedCliente
-          ) || [];
-          setClienteDocuments(docs);
-        }
-      } catch (error) {
-        console.error("Erro ao carregar documentos:", error);
-      }
-    }
     loadClienteDocuments();
-  }, [selectedCliente]);
+  }, [selectedCliente, loadClienteDocuments]);
+
+  // Iniciar modo de upload
+  const startUploadMode = () => {
+    if (!selectedCliente) {
+      alert("Por favor, selecione um cliente primeiro");
+      return;
+    }
+    setIsUploadMode(true);
+    setMessages([{
+      role: "assistant",
+      content: `Modo de upload ativado para o cliente ${selectedCliente}.\n\nPor favor, envie o conteúdo do documento em formato JSON. O documento será automaticamente associado ao cliente ${selectedCliente}.\n\nExemplo de formato aceito:\n{\n  "titulo": "Nome do Documento",\n  "conteudo": "Texto do documento aqui"\n}`
+    }]);
+  };
 
   const handleDocumentSelect = (doc: Document) => {
     if (selectedDocuments.some(d => d.id === doc.id)) {
@@ -89,7 +104,7 @@ export default function ChatClientesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || selectedDocuments.length === 0) return;
+    if (!input.trim()) return;
 
     const userMessage = { role: "user" as const, content: input };
     setMessages(prev => [...prev, userMessage]);
@@ -97,22 +112,79 @@ export default function ChatClientesPage() {
     setLoading(true);
 
     try {
-      const response = await fetch("/api/chat/clientes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: input,
-          history: messages,
-          documentIds: selectedDocuments.map(doc => doc.id)
-        })
-      });
+      if (isUploadMode) {
+        // Tentar fazer parse do JSON
+        try {
+          const jsonContent = JSON.parse(input);
+          
+          // Criar um Blob com o conteúdo JSON
+          const blob = new Blob([JSON.stringify(jsonContent, null, 2)], { type: 'application/json' });
+          const file = new File([blob], `${jsonContent.titulo || 'documento'}.json`, { type: 'application/json' });
+          
+          // Criar FormData para upload
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("metadata", JSON.stringify({ cliente: selectedCliente }));
 
-      if (!response.ok) throw new Error("Erro ao enviar mensagem");
-      
-      const data = await response.json();
-      setMessages(prev => [...prev, { role: "assistant", content: data.response }]);
+          // Fazer upload do documento
+          const uploadResponse = await fetch("/api/documents/upload", {
+            method: "POST",
+            body: formData
+          });
+
+          if (!uploadResponse.ok) {
+            throw new Error("Erro ao fazer upload do documento");
+          }
+
+          // Adicionar mensagem de sucesso
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: `✅ Documento "${jsonContent.titulo || 'documento'}.json" foi enviado com sucesso!\n\nO documento já está disponível na lista de documentos do cliente.`
+          }]);
+
+          // Recarregar documentos do cliente
+          await loadClienteDocuments();
+          
+          // Desativar modo de upload
+          setIsUploadMode(false);
+
+        } catch (error) {
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: "❌ Erro: O conteúdo enviado não é um JSON válido. Por favor, verifique o formato e tente novamente."
+          }]);
+        }
+      } else {
+        // Modo chat normal
+        if (selectedDocuments.length === 0) {
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: "Por favor, selecione pelo menos um documento para iniciar o chat."
+          }]);
+          return;
+        }
+
+        const response = await fetch("/api/chat/clientes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: input,
+            history: messages,
+            documentIds: selectedDocuments.map(doc => doc.id)
+          })
+        });
+
+        if (!response.ok) throw new Error("Erro ao enviar mensagem");
+        
+        const data = await response.json();
+        setMessages(prev => [...prev, { role: "assistant", content: data.response }]);
+      }
     } catch (error) {
       console.error("Erro:", error);
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: "❌ Ocorreu um erro ao processar sua solicitação. Por favor, tente novamente."
+      }]);
     } finally {
       setLoading(false);
     }
@@ -149,7 +221,11 @@ export default function ChatClientesPage() {
             <select
               className="w-full p-2 mb-4 border rounded"
               value={selectedCliente || ""}
-              onChange={(e) => setSelectedCliente(e.target.value || null)}
+              onChange={(e) => {
+                setSelectedCliente(e.target.value || null);
+                setIsUploadMode(false);
+                setMessages([]);
+              }}
             >
               <option value="">Selecione um cliente</option>
               {clientes.map((cliente) => (
@@ -158,6 +234,18 @@ export default function ChatClientesPage() {
                 </option>
               ))}
             </select>
+
+            {/* Botão de Upload pelo Chat */}
+            {selectedCliente && (
+              <Button
+                onClick={startUploadMode}
+                className="w-full mb-4"
+                variant={isUploadMode ? "secondary" : "outline"}
+              >
+                <UploadIcon className="w-4 h-4 mr-2" />
+                Upload pelo Chat
+              </Button>
+            )}
 
             {/* Lista de Documentos */}
             <div className="space-y-2">
@@ -169,7 +257,7 @@ export default function ChatClientesPage() {
                       ? "bg-blue-100"
                       : "bg-gray-50 hover:bg-gray-100"
                   }`}
-                  onClick={() => handleDocumentSelect(doc)}
+                  onClick={() => !isUploadMode && handleDocumentSelect(doc)}
                 >
                   <div className="flex items-start">
                     <FileIcon className="w-4 h-4 mt-1 mr-2 text-gray-500" />
@@ -187,37 +275,39 @@ export default function ChatClientesPage() {
         {/* Coluna da direita - Chat e documentos selecionados */}
         <div className="col-span-8">
           {/* Documentos Selecionados */}
-          <Card className="p-4 mb-4">
-            <div className="flex justify-between items-center mb-2">
-              <h2 className="text-lg font-semibold">Documentos Selecionados</h2>
-              {selectedDocuments.length > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSelectedDocuments([])}
-                >
-                  Limpar seleção
-                </Button>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {selectedDocuments.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="flex items-center bg-blue-50 text-blue-700 px-3 py-1 rounded"
-                >
-                  <FileIcon className="w-4 h-4 mr-2" />
-                  <span className="text-sm">{doc.name}</span>
-                  <button
-                    onClick={() => handleDocumentSelect(doc)}
-                    className="ml-2 hover:text-blue-900"
+          {!isUploadMode && (
+            <Card className="p-4 mb-4">
+              <div className="flex justify-between items-center mb-2">
+                <h2 className="text-lg font-semibold">Documentos Selecionados</h2>
+                {selectedDocuments.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedDocuments([])}
                   >
-                    <XIcon className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </Card>
+                    Limpar seleção
+                  </Button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {selectedDocuments.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-center bg-blue-50 text-blue-700 px-3 py-1 rounded"
+                  >
+                    <FileIcon className="w-4 h-4 mr-2" />
+                    <span className="text-sm">{doc.name}</span>
+                    <button
+                      onClick={() => handleDocumentSelect(doc)}
+                      className="ml-2 hover:text-blue-900"
+                    >
+                      <XIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {/* Área do Chat */}
           <div className="bg-white rounded-lg shadow-lg p-4 mb-4 min-h-[400px] max-h-[600px] overflow-y-auto">
@@ -230,7 +320,7 @@ export default function ChatClientesPage() {
                     : "bg-gray-100 mr-auto max-w-[80%]"
                 }`}
               >
-                {msg.content}
+                <pre className="whitespace-pre-wrap">{msg.content}</pre>
               </div>
             ))}
             {loading && (
@@ -246,15 +336,19 @@ export default function ChatClientesPage() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={selectedDocuments.length > 0 
-                ? "Digite sua pergunta..." 
-                : "Selecione pelo menos um documento para começar"}
+              placeholder={
+                isUploadMode
+                  ? "Cole o conteúdo JSON aqui..."
+                  : selectedDocuments.length > 0 
+                    ? "Digite sua pergunta..." 
+                    : "Selecione pelo menos um documento para começar"
+              }
               className="flex-1 p-2 border rounded-lg"
-              disabled={loading || selectedDocuments.length === 0}
+              disabled={loading || (!isUploadMode && selectedDocuments.length === 0)}
             />
             <Button 
               type="submit" 
-              disabled={loading || selectedDocuments.length === 0}
+              disabled={loading || (!isUploadMode && selectedDocuments.length === 0)}
             >
               Enviar
             </Button>
