@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Trash2 } from "lucide-react";
+import { Download, Upload, Trash2, UsersIcon, UploadIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 // Função para formatar data de forma consistente
@@ -20,7 +20,7 @@ interface Document {
   metadata: {
     scope?: string;
     tipo?: string;
-    autor?: string;
+    cliente?: string;
   };
   created_at: string;
 }
@@ -106,14 +106,7 @@ export default function GerenciadorPage() {
   return (
     <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold">Gerenciador de Arquivos</h1>
-        <Button 
-          onClick={() => router.push("/gerenciador/upload")}
-          className="cursor-pointer"
-        >
-          <Upload className="w-4 h-4 mr-2" />
-          Novo Documento
-        </Button>
+        <h1 className="text-2xl font-bold">Gerenciador de Documentos</h1>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -135,9 +128,9 @@ export default function GerenciadorPage() {
                     Tipo: {doc.metadata.tipo}
                   </p>
                 )}
-                {doc.metadata?.autor && (
+                {doc.metadata?.cliente && (
                   <p className="text-sm text-gray-600">
-                    Autor: {doc.metadata.autor}
+                    Cliente: {doc.metadata.cliente}
                   </p>
                 )}
               </div>

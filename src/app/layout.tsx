@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import Navigation from "@/components/custom/Navigation";
+import { Providers } from "./providers";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -16,7 +18,17 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body className={inter.className} suppressHydrationWarning>{children}</body>
+      <head>
+        <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
+      </head>
+      <body className={inter.className} suppressHydrationWarning>
+        <Providers>
+          <Navigation />
+          <main className="pt-20">
+            {children}
+          </main>
+        </Providers>
+      </body>
     </html>
   );
 }

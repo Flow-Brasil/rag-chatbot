@@ -34,13 +34,6 @@ export default function Home() {
         >
           Gerenciador de Arquivos
         </Button>
-        <Button 
-          onClick={() => router.push("/gerenciador/upload")}
-          className="text-lg px-8 py-6 bg-blue-500 hover:bg-blue-600 text-white"
-        >
-          <Upload className="w-5 h-5 mr-2" />
-          Upload de Documento
-        </Button>
       </div>
     </main>
   );

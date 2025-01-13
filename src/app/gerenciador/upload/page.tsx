@@ -1,20 +1,57 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FileIcon } from "lucide-react";
+import { Autocomplete, AutocompleteItem } from "@nextui-org/react";
+
+interface Cliente {
+  name: string;
+  documentCount: number;
+}
 
 export default function UploadPage() {
   const router = useRouter();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [metadata, setMetadata] = useState({
-    scope: "",
-    tipo: "",
-    autor: ""
+    cliente: ""
   });
+
+  // Buscar lista de clientes
+  useEffect(() => {
+    async function fetchClientes() {
+      try {
+        const response = await fetch("/api/documents");
+        if (!response.ok) throw new Error("Erro ao carregar documentos");
+        const data = await response.json();
+        
+        // Agrupar documentos por cliente e contar
+        const clientesMap = new Map<string, number>();
+        data.documents.forEach((doc: any) => {
+          const clienteName = doc.metadata?.cliente;
+          if (clienteName) {
+            clientesMap.set(clienteName, (clientesMap.get(clienteName) || 0) + 1);
+          }
+        });
+        
+        // Converter para array de clientes
+        const clientesArray = Array.from(clientesMap.entries()).map(([name, count]) => ({
+          name,
+          documentCount: count
+        }));
+        
+        setClientes(clientesArray);
+      } catch (error) {
+        console.error("Erro ao carregar clientes:", error);
+      }
+    }
+    
+    fetchClientes();
+  }, []);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -25,7 +62,7 @@ export default function UploadPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFile) return;
+    if (!selectedFile || !metadata.cliente) return;
 
     setUploading(true);
     try {
@@ -94,54 +131,31 @@ export default function UploadPage() {
             </div>
           </div>
 
-          {/* Campos de metadados */}
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Escopo</label>
-              <input
-                type="text"
-                value={metadata.scope}
-                onChange={(e) => setMetadata(prev => ({ ...prev, scope: e.target.value }))}
-                placeholder="Ex: documentos, manuais, etc"
-                className="w-full p-2 border rounded-lg"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Tipo</label>
-              <input
-                type="text"
-                value={metadata.tipo}
-                onChange={(e) => setMetadata(prev => ({ ...prev, tipo: e.target.value }))}
-                placeholder="Ex: manual, relatório, etc"
-                className="w-full p-2 border rounded-lg"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Autor</label>
-              <input
-                type="text"
-                value={metadata.autor}
-                onChange={(e) => setMetadata(prev => ({ ...prev, autor: e.target.value }))}
-                className="w-full p-2 border rounded-lg"
-              />
-            </div>
+          {/* Campo de seleção de cliente com Autocomplete */}
+          <div>
+            <label className="block text-sm font-medium mb-2">Cliente</label>
+            <Autocomplete
+              allowsCustomValue
+              placeholder="Selecione ou adicione um cliente"
+              defaultItems={clientes}
+              value={metadata.cliente}
+              onInputChange={(value) => setMetadata(prev => ({ ...prev, cliente: value }))}
+              className="w-full"
+            >
+              {(cliente) => (
+                <AutocompleteItem key={cliente.name} value={cliente.name}>
+                  {cliente.name} ({cliente.documentCount} doc{cliente.documentCount !== 1 ? 's' : ''})
+                </AutocompleteItem>
+              )}
+            </Autocomplete>
           </div>
 
-          {/* Botões */}
-          <div className="flex gap-4 justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.push("/gerenciador")}
-              disabled={uploading}
-            >
-              Cancelar
-            </Button>
+          {/* Botão de envio */}
+          <div className="flex justify-end">
             <Button
               type="submit"
-              disabled={!selectedFile || uploading}
+              disabled={!selectedFile || !metadata.cliente || uploading}
+              className="px-8"
             >
               {uploading ? "Enviando..." : "Enviar"}
             </Button>
