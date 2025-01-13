@@ -3,11 +3,11 @@ import { ragieClient } from "@/lib/ragie";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { documentId: string } }
 ) {
   try {
-    const { id } = params;
-    const content = await ragieClient.getDocumentContent(id);
+    const { documentId } = params;
+    const content = await ragieClient.getDocumentContent(documentId);
     return NextResponse.json(content);
   } catch (error) {
     console.error("Error getting document content:", error);

@@ -82,11 +82,9 @@ export function DocumentList() {
           <div className="flex justify-between items-start mb-4">
             <div>
               <h3 className="font-semibold">{doc.name}</h3>
-              <p>Status: {doc.status}</p>
-              <p>Chunks: {doc.chunk_count}</p>
               {doc.metadata?.scope && (
                 <div>
-                  <p>Escopo: {doc.metadata.scope}</p>
+                  <p className="text-sm text-gray-600">Escopo: {doc.metadata.scope}</p>
                 </div>
               )}
             </div>

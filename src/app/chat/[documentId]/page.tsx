@@ -68,12 +68,16 @@ export default function ChatPage() {
     <div className="container mx-auto p-4 max-w-4xl">
       <div className="mb-4">
         <h1 className="text-2xl font-bold mb-2">Chat</h1>
-        {documentInfo && (
-          <Card className="p-4 mb-4">
-            <h2 className="font-semibold">{documentInfo.name}</h2>
-            <p className="text-sm text-gray-600">ID: {documentInfo.id}</p>
-          </Card>
-        )}
+        <Card className="p-4">
+          {documentInfo && (
+            <div>
+              <h3 className="font-semibold mb-2">{documentInfo.name}</h3>
+              {documentInfo.metadata?.scope && (
+                <p className="text-sm text-gray-600">Escopo: {documentInfo.metadata.scope}</p>
+              )}
+            </div>
+          )}
+        </Card>
       </div>
 
       <div className="bg-white rounded-lg shadow-lg p-4 mb-4 min-h-[400px] max-h-[600px] overflow-y-auto">
