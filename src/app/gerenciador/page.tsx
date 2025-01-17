@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Trash2, UsersIcon, UploadIcon, CalendarIcon, FilterIcon, XCircle } from "lucide-react";
+import { Download, Upload, Trash2, UsersIcon, UploadIcon, CalendarIcon, FilterIcon, XCircle, FileText, Filter } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Checkbox, Select, SelectItem } from "@nextui-org/react";
 import { IntelligentSelector } from "@/components/selectors/IntelligentSelector";
@@ -11,23 +11,41 @@ import { MetadataEditor } from "@/components/selectors/MetadataEditor";
 import type { Cliente } from "@/lib/api/clientes";
 
 // Função para formatar data de forma consistente
-function formatDate(dateString: string) {
-  const date = new Date(dateString);
+function formatDate(dateString: string | Date): string {
+  const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
   return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+}
+
+interface MetadataFilters {
+  [key: string]: string | undefined;
 }
 
 interface Document {
   id: string;
   name: string;
   status: string;
-  chunk_count: number;
-  metadata: {
-    scope?: string;
+  metadata?: {
     tipo?: string;
     cliente?: string;
     [key: string]: string | undefined;
   };
   created_at: string;
+}
+
+// Função para verificar se um documento é um filtro
+function isFilterDocument(doc: Document): boolean {
+  // Verifica se o tipo no metadata é "filtro"
+  if (doc.metadata?.['tipo']?.toLowerCase() === 'filtro') {
+    return true;
+  }
+  
+  // Verificações secundárias (fallback)
+  const isFilterByName = doc.name.toLowerCase().includes('filtro') || 
+                        doc.name.toLowerCase().includes('filter');
+  const isFilterByScope = doc.metadata?.['scope']?.toLowerCase()?.includes('filtro') || 
+                         doc.metadata?.['scope']?.toLowerCase()?.includes('filter') || false;
+  
+  return isFilterByName || Boolean(isFilterByScope);
 }
 
 export default function GerenciadorPage() {
@@ -44,8 +62,63 @@ export default function GerenciadorPage() {
   const [showFilters, setShowFilters] = useState(false);
   
   // Estado para filtros de metadados
-  const [metadataFilters, setMetadataFilters] = useState<{ [key: string]: string }>({});
+  const [metadataFilters, setMetadataFilters] = useState<Record<string, string>>({});
   const [existingMetadata, setExistingMetadata] = useState<{[key: string]: Set<string>}>({});
+
+  // Função para atualizar filtros garantindo que undefined não seja atribuído
+  const updateMetadataFilter = (key: string, value: string | undefined) => {
+    const newFilters = { ...metadataFilters };
+    if (value) {
+      newFilters[key] = value;
+    } else {
+      delete newFilters[key];
+    }
+    setMetadataFilters(newFilters);
+  };
+
+  // Atualizar filtros
+  const handleFilterClick = (doc: Document) => {
+    updateMetadataFilter('tipo', doc.metadata?.['tipo']);
+  };
+
+  // Botões de filtro
+  const handleShowAllDocuments = () => {
+    const newFilters = { ...metadataFilters };
+    if (isFilterActive('tipo', 'documento')) {
+      delete newFilters['tipo'];
+    } else {
+      newFilters['tipo'] = 'documento';
+      // Remover filtro de filtros se estiver ativo
+      if (newFilters['tipo'] === 'filtro') {
+        delete newFilters['tipo'];
+      }
+    }
+    setMetadataFilters(newFilters);
+  };
+
+  const handleShowAllFilters = () => {
+    const newFilters = { ...metadataFilters };
+    if (isFilterActive('tipo', 'filtro')) {
+      delete newFilters['tipo'];
+    } else {
+      newFilters['tipo'] = 'filtro';
+      // Remover filtro de documentos se estiver ativo
+      if (newFilters['tipo'] === 'documento') {
+        delete newFilters['tipo'];
+      }
+    }
+    setMetadataFilters(newFilters);
+  };
+
+  const handleShowByTool = () => {
+    const newFilters = { ...metadataFilters };
+    if (isFilterActive('hasFerramentas', 'true')) {
+      delete newFilters['hasFerramentas'];
+    } else {
+      newFilters['hasFerramentas'] = 'true';
+    }
+    setMetadataFilters(newFilters);
+  };
 
   // Função para carregar clientes e metadados
   const fetchData = useCallback(async () => {
@@ -222,49 +295,55 @@ export default function GerenciadorPage() {
     }
   };
 
-  // Filtrar documentos
-  const filteredDocuments = documents.filter(doc => {
-    // Se não houver metadata no documento, não passa no filtro
-    if (!doc.metadata) return false;
+  // Separar documentos em selecionados e não selecionados
+  const selectedDocuments = documents.filter(doc => selectedDocs.includes(doc.id));
+  const nonSelectedDocuments = documents.filter(doc => !selectedDocs.includes(doc.id));
 
-    // Se não houver filtros ativos, mostrar todos os documentos
+  // Aplicar filtros apenas nos documentos não selecionados
+  const filteredNonSelectedDocuments = nonSelectedDocuments.filter(doc => {
+    // Se não há filtros ativos, mostrar todos
     if (Object.keys(metadataFilters).length === 0) return true;
 
-    // Agrupar filtros por chave (ex: todos os valores de "cliente" juntos)
-    const filterGroups = new Map<string, Set<string>>();
-    
-    Object.entries(metadataFilters).forEach(([key, value]) => {
-      if (!value) return; // Ignorar valores vazios
-      
-      const baseKey = key.split('_')[0]; // Remove sufixo numérico
-      if (!filterGroups.has(baseKey)) {
-        filterGroups.set(baseKey, new Set<string>());
+    // Verificar cada filtro
+    return Object.entries(metadataFilters).every(([key, value]) => {
+      if (!value) return true;
+
+      // Filtro de documentos
+      if (key === 'tipo' && value === 'documento') {
+        return doc.metadata?.['tipo'] !== 'filtro';
       }
-      const group = filterGroups.get(baseKey);
-      if (group && typeof value === 'string') {
-        group.add(value);
+
+      // Filtro de filtros
+      if (key === 'tipo' && value === 'filtro') {
+        return doc.metadata?.['tipo'] === 'filtro';
       }
+
+      // Filtro de ferramentas
+      if (key === 'hasFerramentas') {
+        return doc.metadata?.['Ferramenta'] !== undefined && 
+               doc.metadata?.['Ferramenta'] !== '';
+      }
+
+      // Outros filtros de metadados
+      return doc.metadata?.[key] === value;
     });
-
-    // Se não há grupos de filtros, mostrar o documento
-    if (filterGroups.size === 0) return true;
-
-    // Verificar cada grupo de filtros
-    for (const [key, values] of Array.from(filterGroups.entries())) {
-      // Se não há valores para verificar nesta chave, continua para o próximo grupo
-      if (values.size === 0) continue;
-
-      // Verificar se o documento tem um valor válido para esta chave
-      const docValue = doc.metadata[key];
-      if (!docValue || typeof docValue !== 'string') return false;
-
-      // Se o valor do documento não está entre os valores filtrados, não passa no filtro
-      if (!values.has(docValue)) return false;
-    }
-
-    // Se passou por todos os filtros, mostra o documento
-    return true;
   });
+
+  // Combinar documentos selecionados com documentos filtrados
+  const filteredDocuments = [...selectedDocuments, ...filteredNonSelectedDocuments];
+
+  // Contadores para os botões (não mudam com a seleção)
+  const totalDocuments = documents.filter(doc => doc.metadata?.['tipo'] !== 'filtro').length;
+  const totalFilters = documents.filter(doc => doc.metadata?.['tipo'] === 'filtro').length;
+  const totalWithTools = documents.filter(doc => 
+    doc.metadata?.['Ferramenta'] !== undefined && 
+    doc.metadata?.['Ferramenta'] !== ''
+  ).length;
+
+  // Função para verificar se um filtro está ativo
+  const isFilterActive = (filterType: string, value: string) => {
+    return metadataFilters[filterType] === value;
+  };
 
   if (loading) {
     return <div className="container mx-auto p-4">Carregando documentos...</div>;
@@ -279,6 +358,16 @@ export default function GerenciadorPage() {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Gerenciador de Documentos</h1>
         <div className="flex gap-2">
+          {selectedDocs.length > 0 && (
+            <Button
+              onClick={handleBulkDelete}
+              variant="outline"
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Deletar Selecionados ({selectedDocs.length})
+            </Button>
+          )}
           <Button
             onClick={() => router.push("/gerenciador/upload" as any)}
           >
@@ -311,83 +400,147 @@ export default function GerenciadorPage() {
         />
       </div>
 
-      {/* Lista de Documentos */}
-      <div className="bg-white rounded-lg p-4 border">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold">Documentos</h2>
-          <div className="flex items-center gap-2">
-            {reloading && (
-              <span className="text-sm text-gray-500">Atualizando...</span>
-            )}
-            {selectedDocs.length > 0 && (
-              <Button
-                variant="outline"
-                onClick={handleBulkDelete}
-                className="text-red-500 hover:text-red-700"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Deletar Selecionados ({selectedDocs.length})
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Cabeçalho da Lista */}
-        <div className="flex items-center gap-4 p-2 bg-gray-50 rounded">
-          <Checkbox
-            isSelected={selectedDocs.length === filteredDocuments.length && filteredDocuments.length > 0}
-            isIndeterminate={selectedDocs.length > 0 && selectedDocs.length < filteredDocuments.length}
-            onValueChange={handleSelectAll}
-          />
-          <div className="flex-1 grid grid-cols-5 gap-4">
-            <span className="font-medium">Nome</span>
-            <span className="font-medium">Cliente</span>
-            <span className="font-medium">Status</span>
-            <span className="font-medium">Data</span>
-            <span className="font-medium">Ações</span>
-          </div>
-        </div>
-
-        {/* Lista de Documentos */}
-        {filteredDocuments.map(doc => (
-          <div key={doc.id} className="flex items-center gap-4 p-2 hover:bg-gray-50 rounded">
-            <Checkbox
-              isSelected={selectedDocs.includes(doc.id)}
-              onValueChange={() => handleSelectDoc(doc.id)}
-            />
-            <div className="flex-1 grid grid-cols-5 gap-4">
-              <span className="truncate">{doc.name}</span>
-              <span className="truncate">{doc.metadata?.cliente || "-"}</span>
-              <span>{doc.status}</span>
-              <span>{doc.created_at ? formatDate(doc.created_at) : "-"}</span>
-              <div className="flex gap-2">
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => handleDownload(doc.id, doc.name)}
-                >
-                  <Download className="w-4 h-4" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => handleDelete(doc.id)}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
+      {/* Estatísticas e Filtros Rápidos */}
+      <div className="flex gap-8 mb-6">
+        <Button
+          variant="outline"
+          onClick={handleShowAllDocuments}
+          className={`flex-1 h-auto py-4 ${
+            metadataFilters['tipo'] === 'documento' ? 'border-blue-600 bg-blue-50' : ''
+          }`}
+        >
+          <div className="flex items-center gap-4">
+            <div className="text-blue-600">
+              <FileText className="w-8 h-8" />
+            </div>
+            <div className="text-left">
+              <h3 className="text-sm font-medium text-gray-600">Total de Documentos</h3>
+              <p className="text-2xl font-bold">{totalDocuments}</p>
             </div>
           </div>
-        ))}
-
-        {/* Mensagem quando não há documentos */}
-        {filteredDocuments.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            Nenhum documento encontrado
-            {Object.keys(metadataFilters).length > 0 && " com os filtros selecionados"}
+        </Button>
+        <Button
+          variant="outline"
+          onClick={handleShowAllFilters}
+          className={`flex-1 h-auto py-4 ${
+            metadataFilters['tipo'] === 'filtro' ? 'border-purple-600 bg-purple-50' : ''
+          }`}
+        >
+          <div className="flex items-center gap-4">
+            <div className="text-purple-600">
+              <Filter className="w-8 h-8" />
+            </div>
+            <div className="text-left">
+              <h3 className="text-sm font-medium text-gray-600">Total de Filtros</h3>
+              <p className="text-2xl font-bold">{totalFilters}</p>
+            </div>
           </div>
-        )}
+        </Button>
+        <Button
+          variant="outline"
+          onClick={handleShowByTool}
+          className={`flex-1 h-auto py-4 ${
+            metadataFilters['hasFerramentas'] ? 'border-green-600 bg-green-50' : ''
+          }`}
+        >
+          <div className="flex items-center gap-4">
+            <div className="text-green-600">
+              <FileText className="w-8 h-8" />
+            </div>
+            <div className="text-left">
+              <h3 className="text-sm font-medium text-gray-600">Ferramenta</h3>
+              <p className="text-2xl font-bold">{totalWithTools}</p>
+            </div>
+          </div>
+        </Button>
       </div>
+
+      {/* Tabela */}
+      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-200">
+              <th className="w-8 p-4">
+                <Checkbox
+                  isSelected={selectedDocs.length === filteredDocuments.length && filteredDocuments.length > 0}
+                  onValueChange={handleSelectAll}
+                />
+              </th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Nome</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Cliente</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Status</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Data</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Tipo</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Ferramenta</th>
+              <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredDocuments.map((doc) => (
+              <tr 
+                key={doc.id} 
+                className={`border-b border-gray-200 hover:bg-gray-50 ${
+                  selectedDocs.includes(doc.id) ? 'bg-blue-50' : ''
+                }`}
+              >
+                <td className="w-8 p-4">
+                  <Checkbox
+                    isSelected={selectedDocs.includes(doc.id)}
+                    onValueChange={() => handleSelectDoc(doc.id)}
+                  />
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    {doc.metadata?.tipo === 'filtro' ? (
+                      <Filter className="w-4 h-4 text-purple-600" />
+                    ) : (
+                      <FileText className="w-4 h-4 text-blue-600" />
+                    )}
+                    <span className="text-sm font-medium">{doc.name || ''}</span>
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-sm">{doc.metadata?.['cliente'] || '-'}</td>
+                <td className="px-4 py-3">
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    doc.status === 'ready' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {doc.status || 'pending'}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-sm">{formatDate(doc.created_at || new Date())}</td>
+                <td className="px-4 py-3">
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    doc.metadata?.['tipo'] === 'filtro' 
+                      ? 'bg-purple-100 text-purple-800' 
+                      : 'bg-blue-100 text-blue-800'
+                  }`}>
+                    {doc.metadata?.['tipo'] === 'filtro' ? 'Filtro' : 'Documento'}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-sm">{doc.metadata?.['Ferramenta'] || '-'}</td>
+                <td className="px-4 py-3 text-right">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDelete(doc.id)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mensagem quando não há documentos */}
+      {filteredDocuments.length === 0 && (
+        <div className="text-center py-8 text-gray-500">
+          Nenhum documento encontrado
+          {Object.keys(metadataFilters).length > 0 && " com os filtros selecionados"}
+        </div>
+      )}
     </div>
   );
 } 

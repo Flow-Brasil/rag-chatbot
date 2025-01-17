@@ -2,122 +2,101 @@
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { MessageSquare, FileText, Settings, Upload } from "lucide-react";
+import { MessageSquare, FileText, Settings, Upload, Filter } from "lucide-react";
 import Link from "next/link";
 
-export default function Home() {
+export default function HomePage() {
   return (
-    <main className="container mx-auto p-4">
-      <h1 className="text-4xl font-bold mb-8">RAG Chatbot</h1>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Chat Geral */}
-        <Card className="p-6">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2">
-              <MessageSquare className="w-6 h-6" />
-              <h2 className="text-xl font-semibold">Chat Geral</h2>
+    <main className="flex min-h-screen flex-col items-center justify-between p-24">
+      <div className="z-10 max-w-5xl w-full items-center justify-between text-sm lg:flex">
+        <div className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl lg:static lg:w-auto lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4">
+          <code className="font-mono font-bold">Ragie</code>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl w-full">
+        {/* Card de Chat */}
+        <Card className="p-6 hover:shadow-lg transition-shadow">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="p-3 bg-blue-50 rounded-lg">
+              <MessageSquare className="w-6 h-6 text-blue-500" />
             </div>
-            <p className="text-gray-600">
-              Converse com o chatbot sobre todos os documentos disponíveis.
-            </p>
-            <div className="mt-auto">
-              <Button asChild className="w-full">
-                <Link href={{ pathname: "/chat/geral" }}>Acessar Chat Geral</Link>
-              </Button>
-            </div>
+            <h2 className="text-xl font-semibold">Chat</h2>
           </div>
+          <p className="text-gray-600 mb-4">
+            Converse com seus documentos de forma inteligente.
+          </p>
+          <Link href="/chat">
+            <Button className="w-full">Acessar Chat</Button>
+          </Link>
         </Card>
 
-        {/* Chat por Cliente */}
-        <Card className="p-6">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2">
-              <FileText className="w-6 h-6" />
-              <h2 className="text-xl font-semibold">Chat por Cliente</h2>
+        {/* Card de Documentos */}
+        <Card className="p-6 hover:shadow-lg transition-shadow">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="p-3 bg-blue-50 rounded-lg">
+              <FileText className="w-6 h-6 text-blue-500" />
             </div>
-            <p className="text-gray-600">
-              Consulte documentos específicos de cada cliente.
-            </p>
-            <div className="mt-auto">
-              <Button asChild className="w-full">
-                <Link href={{ pathname: "/chat/clientes" }}>Acessar Chat por Cliente</Link>
-              </Button>
-            </div>
+            <h2 className="text-xl font-semibold">Documentos</h2>
           </div>
+          <p className="text-gray-600 mb-4">
+            Gerencie seus documentos e metadados.
+          </p>
+          <Link href="/gerenciador">
+            <Button className="w-full">Gerenciar Documentos</Button>
+          </Link>
         </Card>
 
-        {/* Upload Simples */}
-        <Card className="p-6">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2">
-              <Upload className="w-6 h-6" />
-              <h2 className="text-xl font-semibold">Upload Simples</h2>
+        {/* Card de Upload */}
+        <Card className="p-6 hover:shadow-lg transition-shadow">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="p-3 bg-blue-50 rounded-lg">
+              <Upload className="w-6 h-6 text-blue-500" />
             </div>
-            <p className="text-gray-600">
-              Faça upload de documentos de forma rápida e simples.
-            </p>
-            <div className="mt-auto">
-              <Button asChild className="w-full">
-                <Link href={{ pathname: "/gerenciador/upload" }}>Fazer Upload</Link>
-              </Button>
-            </div>
+            <h2 className="text-xl font-semibold">Upload</h2>
           </div>
+          <p className="text-gray-600 mb-4">
+            Faça upload de documentos com metadados personalizados.
+          </p>
+          <Link href="/gerenciador/upload_completo/1">
+            <Button className="w-full">Fazer Upload</Button>
+          </Link>
         </Card>
 
-        {/* Upload Customizado */}
-        <Card className="p-6">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2">
-              <Settings className="w-6 h-6" />
-              <h2 className="text-xl font-semibold">Upload Customizado</h2>
+        {/* Card de Filtros */}
+        <Card className="p-6 hover:shadow-lg transition-shadow">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="p-3 bg-blue-50 rounded-lg">
+              <Filter className="w-6 h-6 text-blue-500" />
             </div>
-            <p className="text-gray-600">
-              Envie documentos com conteúdo personalizado para o chat.
-            </p>
-            <div className="mt-auto">
-              <Button asChild className="w-full">
-                <Link href={{ pathname: "/chat/clientes/upload_customizado" }}>Upload Customizado</Link>
-              </Button>
-            </div>
+            <h2 className="text-xl font-semibold">Filtros</h2>
           </div>
+          <p className="text-gray-600 mb-4">
+            Crie e gerencie filtros para seus documentos.
+          </p>
+          <Link href="/gerir_filtros_doc/1">
+            <Button className="w-full">Gerenciar Filtros</Button>
+          </Link>
         </Card>
 
-        {/* Upload Completo */}
-        <Card className="p-6">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2">
-              <Upload className="w-6 h-6" />
-              <h2 className="text-xl font-semibold">Upload Completo</h2>
+        {/* Card de Configurações */}
+        <Card className="p-6 hover:shadow-lg transition-shadow col-span-2">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="p-3 bg-blue-50 rounded-lg">
+              <Settings className="w-6 h-6 text-blue-500" />
             </div>
-            <p className="text-gray-600">
-              Interface avançada para upload com metadados e múltiplos arquivos.
-            </p>
-            <div className="mt-auto">
-              <Button asChild className="w-full">
-                <Link href={{ pathname: "/gerenciador/upload_completo" }}>Upload Completo</Link>
-              </Button>
-            </div>
+            <h2 className="text-xl font-semibold">Configurações</h2>
           </div>
+          <p className="text-gray-600 mb-4">
+            Configure as opções do sistema.
+          </p>
+          <Link href="/configuracoes">
+            <Button className="w-full">Acessar Configurações</Button>
+          </Link>
         </Card>
+      </div>
 
-        {/* Gerenciador de Documentos */}
-        <Card className="p-6">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2">
-              <Settings className="w-6 h-6" />
-              <h2 className="text-xl font-semibold">Gerenciador</h2>
-            </div>
-            <p className="text-gray-600">
-              Gerencie todos os documentos e metadados do sistema.
-            </p>
-            <div className="mt-auto">
-              <Button asChild className="w-full">
-                <Link href={{ pathname: "/gerenciador" }}>Acessar Gerenciador</Link>
-              </Button>
-            </div>
-          </div>
-        </Card>
+      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
       </div>
     </main>
   );

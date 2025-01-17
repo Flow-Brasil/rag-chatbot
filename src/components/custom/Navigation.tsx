@@ -28,11 +28,11 @@ export default function Navigation() {
           Chat Clientes
         </Link>
         <Link
-          href="/chat/clientes/upload_customizado"
-          className={`flex items-center px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isActive('/chat/clientes/upload_customizado')}`}
+          href="/gerir_filtros_doc/1"
+          className={`flex items-center px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isActive('/gerir_filtros_doc/1')}`}
         >
-          <span className="material-icons mr-2">upload_file</span>
-          Upload Customizado
+          <span className="material-icons mr-2">filter_list</span>
+          Filtros
         </Link>
         <Link
           href="/gerenciador"
@@ -42,8 +42,8 @@ export default function Navigation() {
           Gerenciador
         </Link>
         <Link
-          href="/gerenciador/upload"
-          className={`flex items-center px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isActive('/gerenciador/upload')}`}
+          href="/gerenciador/upload_completo"
+          className={`flex items-center px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isActive('/gerenciador/upload_completo')}`}
         >
           <span className="material-icons mr-2">upload</span>
           Upload

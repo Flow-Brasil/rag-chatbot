@@ -4,8 +4,18 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { FileIcon, CheckCircle2 } from "lucide-react";
+import { FileIcon, X } from "lucide-react";
 import Link from "next/link";
+
+interface Document {
+  id: string;
+  name: string;
+  metadata: {
+    cliente?: string;
+    Ferramenta?: string;
+    [key: string]: string | undefined;
+  };
+}
 
 interface UploadData {
   files: Array<{name: string; type: string; size: number}>;
@@ -21,12 +31,19 @@ export default function UploadEtapa3Page() {
   const [loading, setLoading] = useState(false);
   const [uploadData, setUploadData] = useState<any>(null);
   const [files, setFiles] = useState<File[]>([]);
+  const [associatedDocs, setAssociatedDocs] = useState<Document[]>([]);
 
   useEffect(() => {
     // Recuperar dados do sessionStorage
     const storedData = sessionStorage.getItem('uploadData');
     if (storedData) {
-      setUploadData(JSON.parse(storedData));
+      const parsedData = JSON.parse(storedData);
+      setUploadData(parsedData);
+      
+      // Buscar documentos associados à ferramenta
+      if (parsedData.metadata.Ferramenta) {
+        fetchAssociatedDocs(parsedData.metadata.cliente, parsedData.metadata.Ferramenta);
+      }
     }
 
     // Recuperar arquivos do sessionStorage
@@ -36,7 +53,7 @@ export default function UploadEtapa3Page() {
       // Converter os dados dos arquivos de volta para objetos File
       const reconstructedFiles = filesData.map((fileData: any) => {
         return new File(
-          [fileData.content], 
+          [new Uint8Array(fileData.content)], 
           fileData.name,
           { 
             type: fileData.type,
@@ -48,16 +65,48 @@ export default function UploadEtapa3Page() {
     }
   }, []);
 
+  const fetchAssociatedDocs = async (cliente: string, ferramenta: string) => {
+    try {
+      const response = await fetch("/api/documents");
+      if (!response.ok) throw new Error("Erro ao carregar documentos");
+      const data = await response.json();
+      
+      // Filtrar documentos pelo cliente e ferramenta
+      const docs = data.documents.filter((doc: Document) => 
+        doc.metadata?.cliente === cliente && 
+        doc.metadata?.Ferramenta === ferramenta
+      );
+      
+      setAssociatedDocs(docs);
+    } catch (error) {
+      console.error("Erro ao carregar documentos associados:", error);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!uploadData || files.length === 0) return;
 
     try {
       setLoading(true);
       
-      // Preparar FormData com os arquivos reais
+      // Preparar os dados para upload
       const formData = new FormData();
-      files.forEach(file => formData.append("files", file));
-      formData.append("metadata", JSON.stringify(uploadData.metadata));
+      
+      // Adicionar cada arquivo com seu próprio metadata
+      files.forEach((file, index) => {
+        formData.append("files", file);
+        
+        // Encontrar os metadados específicos deste arquivo
+        const fileMetadata = uploadData.filesWithMetadata?.find(
+          (f: any) => f.name === file.name
+        )?.metadata || uploadData.metadata;
+        
+        // Adicionar metadata para cada arquivo
+        formData.append(
+          `metadata_${index}`,
+          JSON.stringify(fileMetadata)
+        );
+      });
 
       const response = await fetch("/api/documents/upload", {
         method: "POST",
@@ -65,8 +114,8 @@ export default function UploadEtapa3Page() {
       });
 
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Erro ao fazer upload: ${error}`);
+        const error = await response.json();
+        throw new Error(`Erro ao fazer upload: ${JSON.stringify(error)}`);
       }
 
       // Limpar dados do storage
@@ -108,6 +157,9 @@ export default function UploadEtapa3Page() {
           <Button variant="outline" className="w-full">Etapa 2</Button>
         </Link>
         <Button variant="default" className="w-24">Etapa 3</Button>
+        <Button variant="outline" className="w-24" disabled>
+          Etapa 4
+        </Button>
       </div>
 
       <div className="mb-8">
@@ -121,34 +173,63 @@ export default function UploadEtapa3Page() {
         <div className="space-y-6">
           {/* Lista de arquivos */}
           <div>
-            <h2 className="text-lg font-semibold mb-4">Arquivos Selecionados</h2>
-            <div className="space-y-2">
-              {files.map((file, index) => (
-                <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
-                  <div className="flex items-center">
-                    <FileIcon className="w-4 h-4 mr-2 text-gray-500" />
-                    <span className="text-sm font-medium">{file.name}</span>
-                    <span className="text-xs text-gray-500 ml-2">
-                      ({(file.size / 1024).toFixed(2)} KB)
-                    </span>
+            <h2 className="text-lg font-semibold mb-4">Arquivos e Associações</h2>
+            <div className="space-y-4">
+              {uploadData.filesWithMetadata?.map((fileData: any, index: number) => (
+                <div key={index} className="bg-white border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <FileIcon className="w-5 h-5 text-gray-500" />
+                      <span className="font-medium">{fileData.name}</span>
+                      <span className="text-sm text-gray-500">
+                        ({(files[index]?.size ? (files[index].size / 1024).toFixed(2) : '0')} KB)
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-2">
+                    <div className="text-sm text-gray-600 mb-1">Ferramenta associada:</div>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        {fileData.metadata.Ferramenta}
+                      </span>
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Metadados */}
+          {/* Metadados comuns */}
           <div>
-            <h2 className="text-lg font-semibold mb-4">Metadados</h2>
+            <h2 className="text-lg font-semibold mb-4">Metadados Comuns</h2>
             <div className="grid grid-cols-2 gap-4">
-              {Object.entries(uploadData.metadata).map(([key, value]) => (
-                <div key={key} className="bg-gray-50 p-2 rounded">
-                  <span className="text-sm font-medium">{key}: </span>
-                  <span className="text-sm">{value as string}</span>
-                </div>
+              {Object.entries(uploadData.metadata || {}).map(([key, value]) => (
+                key !== 'fileAssociations' && (
+                  <div key={key} className="bg-gray-50 p-2 rounded">
+                    <span className="text-sm font-medium">{key}: </span>
+                    <span className="text-sm">{value as string}</span>
+                  </div>
+                )
               ))}
             </div>
           </div>
+
+          {/* Documentos Associados */}
+          {associatedDocs.length > 0 && (
+            <div>
+              <h2 className="text-lg font-semibold mb-4">Documentos Associados à Ferramenta</h2>
+              <div className="space-y-2">
+                {associatedDocs.map((doc) => (
+                  <div key={doc.id} className="bg-gray-50 p-2 rounded">
+                    <div className="flex items-center">
+                      <FileIcon className="w-4 h-4 mr-2 text-gray-500" />
+                      <span className="text-sm font-medium">{doc.name}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Botões de ação */}
           <div className="flex justify-end gap-4">

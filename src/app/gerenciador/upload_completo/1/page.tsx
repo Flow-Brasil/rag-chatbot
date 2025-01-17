@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { FileIcon, X } from "lucide-react";
+import { FileIcon, X, XCircle } from "lucide-react";
 import { IntelligentSelector } from "@/components/selectors/IntelligentSelector";
 import Link from "next/link";
 
@@ -103,7 +103,24 @@ export default function UploadEtapa1Page() {
   };
 
   return (
-    <div className="container mx-auto p-4 max-w-2xl">
+    <div className="container mx-auto py-8 space-y-8">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Upload de Documentos</h1>
+        <Button
+          variant="outline"
+          onClick={() => {
+            // Limpar dados do upload anterior
+            sessionStorage.removeItem('uploadData');
+            // Recarregar a página
+            window.location.reload();
+          }}
+          className="text-gray-500 hover:text-gray-700"
+        >
+          <XCircle className="w-4 h-4 mr-2" />
+          Recomeçar Upload
+        </Button>
+      </div>
+
       {/* Navegação entre etapas */}
       <div className="flex items-center justify-center gap-2 mb-8">
         <Button
