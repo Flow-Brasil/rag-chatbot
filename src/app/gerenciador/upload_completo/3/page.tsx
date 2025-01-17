@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { FileIcon } from "lucide-react";
+import { FileIcon, Loader2 } from "lucide-react";
 import Link from "next/link";
 
 interface Document {
@@ -216,81 +216,73 @@ export default function UploadEtapa3Page() {
 
       <Card className="p-6">
         <div className="space-y-6">
-          {/* Lista de arquivos */}
-          <div>
-            <h2 className="text-lg font-semibold mb-4">Arquivos e Associações</h2>
-            <div className="space-y-4">
-              {filesWithMetadata.map((fileData, index) => (
-                <div key={index} className="bg-white border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <FileIcon className="w-5 h-5 text-gray-500" />
-                      <span className="font-medium">{fileData.name}</span>
-                      <span className="text-sm text-gray-500">
-                        ({(fileData.size / 1024).toFixed(2)} KB)
-                      </span>
-                    </div>
-                  </div>
-                  <div className="mt-2">
-                    <div className="text-sm text-gray-600 mb-1">Ferramenta associada:</div>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        {fileData.metadata.Ferramenta}
-                      </span>
-                    </div>
-                  </div>
+          {/* Metadados comuns */}
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold mb-2">Metadados Comuns</h2>
+            <div className="grid grid-cols-2 gap-4">
+              {Object.entries({
+                cliente: uploadData.metadata.cliente,
+                Ferramenta: Object.values(uploadData.metadata.fileAssociations || {})[0] || ""
+              }).map(([key, value]) => (
+                <div key={key} className="flex flex-col">
+                  <span className="text-sm font-medium text-gray-500">{key}</span>
+                  <span className="text-sm">{value as string}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Metadados comuns */}
+          {/* Arquivos agrupados por ferramenta */}
           <div>
-            <h2 className="text-lg font-semibold mb-4">Metadados Comuns</h2>
-            <div className="grid grid-cols-2 gap-4">
-              {Object.entries(uploadData.metadata).map(([key, value]) => {
-                if (key !== 'fileAssociations' && key !== 'tools' && typeof value === 'string') {
-                  return (
-                    <div key={key} className="bg-gray-50 p-2 rounded">
-                      <span className="text-sm font-medium">{key}: </span>
-                      <span className="text-sm">{value}</span>
+            <h2 className="text-lg font-semibold mb-4">Arquivos e Associações</h2>
+            {Object.entries(
+              files.reduce((acc, file) => {
+                if (!file) return acc;
+                
+                const fileAssociations = uploadData?.metadata?.fileAssociations;
+                if (!fileAssociations || typeof fileAssociations !== 'object') return acc;
+                
+                const ferramenta = fileAssociations[file.name];
+                if (!ferramenta) return acc;
+                
+                if (!acc[ferramenta]) acc[ferramenta] = [];
+                acc[ferramenta].push(file);
+                return acc;
+              }, {} as Record<string, File[]>)
+            ).map(([ferramenta, arquivos]) => (
+              <div key={ferramenta} className="mb-6">
+                <div className="bg-blue-50 p-3 rounded-lg mb-2">
+                  <h3 className="font-medium text-blue-700">{ferramenta}</h3>
+                  <span className="text-sm text-blue-600">{arquivos.length} arquivo(s)</span>
+                </div>
+                <div className="space-y-2 pl-4">
+                  {arquivos.map((file) => (
+                    <div key={file.name} className="flex items-center gap-2 text-sm">
+                      <FileIcon className="h-4 w-4 text-gray-500" />
+                      <span>{file.name}</span>
+                      <span className="text-gray-500">({(file.size / 1024).toFixed(2)} KB)</span>
                     </div>
-                  );
-                }
-                return null;
-              })}
-            </div>
-          </div>
-
-          {/* Documentos Associados */}
-          {associatedDocs.length > 0 && (
-            <div>
-              <h2 className="text-lg font-semibold mb-4">Documentos Associados à Ferramenta</h2>
-              <div className="space-y-2">
-                {associatedDocs.map((doc) => (
-                  <div key={doc.id} className="bg-gray-50 p-2 rounded">
-                    <div className="flex items-center">
-                      <FileIcon className="w-4 h-4 mr-2 text-gray-500" />
-                      <span className="text-sm font-medium">{doc.name}</span>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-
-          {/* Botões de ação */}
-          <div className="flex justify-end gap-4">
-            <Link href="/gerenciador/upload_completo/2">
-              <Button variant="outline">Voltar</Button>
-            </Link>
-            <Button
-              onClick={handleSubmit}
-              disabled={loading}
-            >
-              {loading ? "Enviando..." : "Confirmar Upload"}
-            </Button>
+            ))}
           </div>
+        </div>
+
+        <div className="mt-8 flex justify-end gap-4">
+          <Link href="/gerenciador/upload_completo/2">
+            <Button variant="outline">Voltar</Button>
+          </Link>
+          <Button onClick={handleSubmit} disabled={loading}>
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Enviando...
+              </>
+            ) : (
+              'Confirmar Upload'
+            )}
+          </Button>
         </div>
       </Card>
     </div>
