@@ -28,6 +28,13 @@ export default function Navigation() {
           Chat Clientes
         </Link>
         <Link
+          href="/chat/clientes/upload_customizado"
+          className={`flex items-center px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isActive('/chat/clientes/upload_customizado')}`}
+        >
+          <span className="material-icons mr-2">upload_file</span>
+          Upload Customizado
+        </Link>
+        <Link
           href="/gerenciador"
           className={`flex items-center px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isActive('/gerenciador')}`}
         >

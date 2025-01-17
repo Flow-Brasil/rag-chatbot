@@ -83,6 +83,24 @@ export default function Home() {
           </div>
         </Card>
 
+        {/* Upload Completo */}
+        <Card className="p-6">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              <Upload className="w-6 h-6" />
+              <h2 className="text-xl font-semibold">Upload Completo</h2>
+            </div>
+            <p className="text-gray-600">
+              Interface avançada para upload com metadados e múltiplos arquivos.
+            </p>
+            <div className="mt-auto">
+              <Button asChild className="w-full">
+                <Link href={{ pathname: "/gerenciador/upload_completo" }}>Upload Completo</Link>
+              </Button>
+            </div>
+          </div>
+        </Card>
+
         {/* Gerenciador de Documentos */}
         <Card className="p-6">
           <div className="flex flex-col gap-4">

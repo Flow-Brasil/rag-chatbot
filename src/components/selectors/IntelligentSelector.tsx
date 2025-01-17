@@ -13,6 +13,7 @@ interface IntelligentSelectorProps {
   selectedCliente: string | null;
   onClientSelect: (clientName: string | null) => void;
   onInputChange: (value: string) => void;
+  onCreateNewClient?: (clientName: string) => void;
   isLoading?: boolean;
   placeholder?: string;
 }
@@ -22,6 +23,7 @@ export function IntelligentSelector({
   selectedCliente,
   onClientSelect,
   onInputChange,
+  onCreateNewClient,
   isLoading = false,
   placeholder = "Digite para buscar ou adicionar um cliente"
 }: IntelligentSelectorProps) {

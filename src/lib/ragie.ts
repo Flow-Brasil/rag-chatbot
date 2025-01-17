@@ -44,7 +44,11 @@ class RagieClient {
   }
 
   async listDocuments(): Promise<RagieDocument[]> {
-    const response = await this.request<{ documents: RagieDocument[] }>("/documents");
+    const params = new URLSearchParams({
+      limit: '1000',
+      offset: '0'
+    });
+    const response = await this.request<{ documents: RagieDocument[] }>(`/documents?${params.toString()}`);
     return response.documents;
   }
 

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Trash2, UsersIcon, UploadIcon, CalendarIcon, FilterIcon } from "lucide-react";
+import { Download, Upload, Trash2, UsersIcon, UploadIcon, CalendarIcon, FilterIcon, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Checkbox, Select, SelectItem } from "@nextui-org/react";
 import { IntelligentSelector } from "@/components/selectors/IntelligentSelector";
@@ -25,7 +25,7 @@ interface Document {
     scope?: string;
     tipo?: string;
     cliente?: string;
-    [key: string]: any;
+    [key: string]: string | undefined;
   };
   created_at: string;
 }
@@ -34,6 +34,7 @@ export default function GerenciadorPage() {
   const router = useRouter();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reloading, setReloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
@@ -44,37 +45,91 @@ export default function GerenciadorPage() {
   
   // Estado para filtros de metadados
   const [metadataFilters, setMetadataFilters] = useState<{ [key: string]: string }>({});
+  const [existingMetadata, setExistingMetadata] = useState<{[key: string]: Set<string>}>({});
 
-  // Função para carregar clientes
-  const fetchClientes = useCallback(async () => {
+  // Função para carregar clientes e metadados
+  const fetchData = useCallback(async () => {
     try {
       setLoadingClientes(true);
-      const response = await fetch("/api/clientes");
-      if (!response.ok) throw new Error("Erro ao carregar clientes");
+      
+      // Buscar documentos para extrair clientes e metadados
+      const response = await fetch("/api/documents");
+      if (!response.ok) throw new Error("Erro ao carregar documentos");
       const data = await response.json();
-      setClientes(data.clientes || []);
+      
+      // Agrupar documentos por cliente e contar
+      const clientesMap = new Map<string, number>();
+      const metadataMap: {[key: string]: Set<string>} = {};
+      
+      data.documents.forEach((doc: any) => {
+        // Processar cliente
+        const clienteName = doc.metadata?.cliente;
+        if (clienteName) {
+          clientesMap.set(clienteName, (clientesMap.get(clienteName) || 0) + 1);
+          // Adicionar cliente ao metadataMap
+          if (!metadataMap['cliente']) {
+            metadataMap['cliente'] = new Set();
+          }
+          metadataMap['cliente'].add(clienteName);
+        }
+        
+        // Processar outros metadados
+        if (doc.metadata) {
+          Object.entries(doc.metadata).forEach(([key, value]) => {
+            if (typeof value === 'string') {
+              if (!metadataMap[key]) {
+                metadataMap[key] = new Set();
+              }
+              metadataMap[key].add(value);
+            }
+          });
+        }
+      });
+      
+      setExistingMetadata(metadataMap);
+      
     } catch (err) {
-      console.error("Erro ao carregar clientes:", err);
-      setClientes([]);
+      console.error("Erro ao carregar dados:", err);
       setError("Erro ao carregar lista de clientes");
     } finally {
       setLoadingClientes(false);
     }
   }, []);
 
-  // Carregar documentos e clientes ao montar o componente
+  // Carregar documentos e dados ao montar o componente
   useEffect(() => {
     Promise.all([
       fetchDocuments(),
-      fetchClientes()
+      fetchData()
     ]).catch(err => {
       console.error("Erro ao carregar dados:", err);
       setError("Erro ao carregar dados");
     });
-  }, [fetchClientes]);
+  }, [fetchData]);
+
+  // Recarregar documentos quando os filtros mudarem
+  useEffect(() => {
+    fetchDocuments();
+  }, [metadataFilters]);
+
+  // Recarregar dados quando a página receber foco
+  useEffect(() => {
+    function onFocus() {
+      Promise.all([
+        fetchDocuments(),
+        fetchData()
+      ]).catch(err => {
+        console.error("Erro ao recarregar dados:", err);
+      });
+    }
+
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
 
   async function fetchDocuments() {
     try {
+      if (!loading) setReloading(true);
       const response = await fetch("/api/documents");
       if (!response.ok) {
         throw new Error(`Error: ${response.status}`);
@@ -85,6 +140,7 @@ export default function GerenciadorPage() {
       setError(err instanceof Error ? err.message : "Erro ao carregar documentos");
     } finally {
       setLoading(false);
+      setReloading(false);
     }
   }
 
@@ -166,20 +222,47 @@ export default function GerenciadorPage() {
     }
   };
 
-  // Função para filtrar documentos
+  // Filtrar documentos
   const filteredDocuments = documents.filter(doc => {
-    // Filtro por cliente
-    if (selectedClient && (!doc.metadata?.cliente || doc.metadata.cliente !== selectedClient)) {
-      return false;
-    }
+    // Se não houver metadata no documento, não passa no filtro
+    if (!doc.metadata) return false;
 
-    // Filtro por metadados
-    for (const [key, value] of Object.entries(metadataFilters)) {
-      if (!doc.metadata || doc.metadata[key] !== value) {
-        return false;
+    // Se não houver filtros ativos, mostrar todos os documentos
+    if (Object.keys(metadataFilters).length === 0) return true;
+
+    // Agrupar filtros por chave (ex: todos os valores de "cliente" juntos)
+    const filterGroups = new Map<string, Set<string>>();
+    
+    Object.entries(metadataFilters).forEach(([key, value]) => {
+      if (!value) return; // Ignorar valores vazios
+      
+      const baseKey = key.split('_')[0]; // Remove sufixo numérico
+      if (!filterGroups.has(baseKey)) {
+        filterGroups.set(baseKey, new Set<string>());
       }
+      const group = filterGroups.get(baseKey);
+      if (group && typeof value === 'string') {
+        group.add(value);
+      }
+    });
+
+    // Se não há grupos de filtros, mostrar o documento
+    if (filterGroups.size === 0) return true;
+
+    // Verificar cada grupo de filtros
+    for (const [key, values] of Array.from(filterGroups.entries())) {
+      // Se não há valores para verificar nesta chave, continua para o próximo grupo
+      if (values.size === 0) continue;
+
+      // Verificar se o documento tem um valor válido para esta chave
+      const docValue = doc.metadata[key];
+      if (!docValue || typeof docValue !== 'string') return false;
+
+      // Se o valor do documento não está entre os valores filtrados, não passa no filtro
+      if (!values.has(docValue)) return false;
     }
 
+    // Se passou por todos os filtros, mostra o documento
     return true;
   });
 
@@ -192,19 +275,12 @@ export default function GerenciadorPage() {
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
+    <div className="container mx-auto py-8 space-y-8">
+      <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Gerenciador de Documentos</h1>
         <div className="flex gap-2">
           <Button
-            variant="outline"
-            onClick={() => setShowFilters(!showFilters)}
-          >
-            <FilterIcon className="w-4 h-4 mr-2" />
-            {showFilters ? "Ocultar Filtros" : "Mostrar Filtros"}
-          </Button>
-          <Button
-            onClick={() => router.push("/gerenciador/upload")}
+            onClick={() => router.push("/gerenciador/upload" as any)}
           >
             <UploadIcon className="w-4 h-4 mr-2" />
             Upload
@@ -212,60 +288,50 @@ export default function GerenciadorPage() {
         </div>
       </div>
 
-      <Card className="p-4 mb-6">
-        <div className="space-y-4">
-          {/* Seletor de Cliente */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Cliente</label>
-            <IntelligentSelector
-              clientes={clientes}
-              selectedCliente={selectedClient}
-              onClientSelect={setSelectedClient}
-              onInputChange={setInputValue}
-              isLoading={loadingClientes}
-              placeholder="Selecione um cliente para filtrar"
-            />
-          </div>
-
-          {/* Área de Filtros de Metadados */}
-          {showFilters && (
-            <div className="mt-4">
-              <label className="block text-sm font-medium mb-2">Filtros de Metadados</label>
-              <MetadataEditor
-                metadata={metadataFilters}
-                onChange={setMetadataFilters}
-              />
-            </div>
+      {/* Área de Filtros - Agora sempre visível */}
+      <div className="bg-white rounded-lg p-4 border space-y-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-lg font-semibold">Filtros</h2>
+          {Object.keys(metadataFilters).length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setMetadataFilters({})}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <XCircle className="w-4 h-4 mr-2" />
+              Limpar Filtros
+            </Button>
           )}
+        </div>
+        <MetadataEditor
+          metadata={metadataFilters}
+          onChange={setMetadataFilters}
+          existingMetadata={existingMetadata}
+        />
+      </div>
 
-          {/* Botões de Ação */}
-          <div className="flex justify-between items-center">
-            <div className="flex gap-2">
-              {selectedDocs.length > 0 && (
-                <Button
-                  variant="outline"
-                  onClick={handleBulkDelete}
-                  className="text-red-500 hover:text-red-700"
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Deletar Selecionados ({selectedDocs.length})
-                </Button>
-              )}
-            </div>
-            {Object.keys(metadataFilters).length > 0 && (
+      {/* Lista de Documentos */}
+      <div className="bg-white rounded-lg p-4 border">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold">Documentos</h2>
+          <div className="flex items-center gap-2">
+            {reloading && (
+              <span className="text-sm text-gray-500">Atualizando...</span>
+            )}
+            {selectedDocs.length > 0 && (
               <Button
-                variant="ghost"
-                onClick={() => setMetadataFilters({})}
+                variant="outline"
+                onClick={handleBulkDelete}
+                className="text-red-500 hover:text-red-700"
               >
-                Limpar Filtros
+                <Trash2 className="w-4 h-4 mr-2" />
+                Deletar Selecionados ({selectedDocs.length})
               </Button>
             )}
           </div>
         </div>
-      </Card>
 
-      {/* Lista de Documentos */}
-      <div className="space-y-4">
         {/* Cabeçalho da Lista */}
         <div className="flex items-center gap-4 p-2 bg-gray-50 rounded">
           <Checkbox
@@ -293,7 +359,7 @@ export default function GerenciadorPage() {
               <span className="truncate">{doc.name}</span>
               <span className="truncate">{doc.metadata?.cliente || "-"}</span>
               <span>{doc.status}</span>
-              <span>{formatDate(doc.created_at)}</span>
+              <span>{doc.created_at ? formatDate(doc.created_at) : "-"}</span>
               <div className="flex gap-2">
                 <Button
                   size="icon"

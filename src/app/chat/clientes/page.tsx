@@ -4,12 +4,13 @@ import React from "react";
 import { useEffect, useState, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeftIcon, MessageSquareIcon, PlusIcon } from "lucide-react";
+import { ArrowLeftIcon, MessageSquareIcon, PlusIcon, FilterIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { IntelligentSelector } from "@/components/selectors/IntelligentSelector";
 import { Checkbox } from "@nextui-org/react";
 import { Input } from "@/components/ui/input";
 import { useChat } from "./_hooks/useChat";
+import { MetadataEditor } from "@/components/selectors/MetadataEditor";
 import type { Cliente } from "@/lib/api/clientes";
 
 interface Document {
@@ -35,6 +36,8 @@ export default function ChatClientesPage() {
   const [clienteDocuments, setClienteDocuments] = useState<Document[]>([]);
   const [selectedDocuments, setSelectedDocuments] = useState<Document[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
+  const [metadataFilters, setMetadataFilters] = useState<{ [key: string]: string }>({});
 
   // Inicializar o hook useChat com mensagem inicial
   const {
@@ -148,52 +151,121 @@ export default function ChatClientesPage() {
     return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
   };
 
+  // Função para filtrar documentos
+  const filteredDocuments = clienteDocuments.filter(doc => {
+    // Filtro por metadados
+    for (const [key, value] of Object.entries(metadataFilters)) {
+      if (!doc.metadata || doc.metadata[key] !== value) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  // Efeito para pré-selecionar documentos filtrados
+  useEffect(() => {
+    if (!selectedDocuments || !filteredDocuments) return;
+
+    const areArraysEqual = (arr1: Document[], arr2: Document[]) => {
+      if (arr1.length !== arr2.length) return false;
+      return arr1.every((doc, index) => {
+        const doc2 = arr2[index];
+        return doc && doc2 && doc.id === doc2.id;
+      });
+    };
+
+    if (!areArraysEqual(selectedDocuments, filteredDocuments)) {
+      setSelectedDocuments(filteredDocuments);
+    }
+  }, [filteredDocuments, selectedDocuments]);
+
   return (
     <div className="container mx-auto p-4 h-screen flex flex-col">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-4">
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            onClick={() => router.push("/")}
+            className="p-2"
+          >
+            <ArrowLeftIcon className="w-4 h-4" />
+          </Button>
+          <h1 className="text-2xl font-bold">Chat por Cliente</h1>
+        </div>
         <Button
-          variant="ghost"
-          onClick={() => router.push("/")}
-          className="p-2"
+          variant="outline"
+          onClick={() => setShowFilters(!showFilters)}
         >
-          <ArrowLeftIcon className="w-4 h-4" />
+          <FilterIcon className="w-4 h-4 mr-2" />
+          {showFilters ? "Ocultar Filtros" : "Mostrar Filtros"}
         </Button>
-        <h1 className="text-2xl font-bold">Chat por Cliente</h1>
       </div>
 
-      {/* Cliente Selector */}
-      <div className="flex items-center gap-4 mb-4">
-        <div className="w-[300px]">
-          <IntelligentSelector
-            clientes={clientes}
-            selectedCliente={selectedCliente}
-            onClientSelect={(clientName) => {
-              setSelectedCliente(clientName);
-              setSelectedDocuments([]);
-              setMessages([{
-                role: "assistant",
-                content: `Cliente ${clientName} selecionado. Aguarde enquanto carrego os documentos...`
-              }]);
-            }}
-            onInputChange={setInputValue}
-            onCreateNewClient={(clientName) => {
-              router.push(`/gerenciador/upload?cliente=${encodeURIComponent(clientName)}`);
-            }}
-            isLoading={loadingClientes}
-            placeholder="Digite para buscar ou adicionar um cliente"
-          />
+      {/* Cliente Selector e Filtros */}
+      <Card className="p-4 mb-4">
+        <div className="space-y-4">
+          {/* Seletor de Cliente */}
+          <div>
+            <label className="block text-sm font-medium mb-2">Cliente</label>
+            <div className="flex items-center gap-4">
+              <div className="w-[300px]">
+                <IntelligentSelector
+                  clientes={clientes}
+                  selectedCliente={selectedCliente}
+                  onClientSelect={(clientName) => {
+                    setSelectedCliente(clientName);
+                    setSelectedDocuments([]);
+                    setMessages([{
+                      role: "assistant",
+                      content: `Cliente ${clientName} selecionado. Aguarde enquanto carrego os documentos...`
+                    }]);
+                  }}
+                  onInputChange={setInputValue}
+                  onCreateNewClient={(clientName) => {
+                    router.push(`/gerenciador/upload?cliente=${encodeURIComponent(clientName)}`);
+                  }}
+                  isLoading={loadingClientes}
+                  placeholder="Digite para buscar ou adicionar um cliente"
+                />
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (selectedCliente) {
+                    router.push(`/chat/clientes/upload_customizado?cliente=${encodeURIComponent(selectedCliente)}` as const);
+                  } else {
+                    router.push('/chat/clientes/upload_customizado' as const);
+                  }
+                }}
+              >
+                <PlusIcon className="w-4 h-4 mr-2" />
+                Upload Customizado
+              </Button>
+            </div>
+          </div>
+
+          {/* Área de Filtros de Metadados */}
+          {showFilters && (
+            <div>
+              <label className="block text-sm font-medium mb-2">Filtros de Metadados</label>
+              <MetadataEditor
+                metadata={metadataFilters}
+                onChange={setMetadataFilters}
+              />
+              {Object.keys(metadataFilters).length > 0 && (
+                <Button
+                  variant="ghost"
+                  onClick={() => setMetadataFilters({})}
+                  className="mt-2"
+                >
+                  Limpar Filtros
+                </Button>
+              )}
+            </div>
+          )}
         </div>
-        {selectedCliente && (
-          <Button
-            variant="outline"
-            onClick={() => router.push(`/chat/clientes/upload_customizado?cliente=${encodeURIComponent(selectedCliente)}`)}
-          >
-            <PlusIcon className="w-4 h-4 mr-2" />
-            Upload Customizado
-          </Button>
-        )}
-      </div>
+      </Card>
 
       {/* Main Content */}
       <div className="flex-1 grid grid-cols-[350px_1fr] gap-4 min-h-0">
