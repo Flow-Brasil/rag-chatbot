@@ -119,26 +119,48 @@ export default function UploadEtapa3Page() {
       const formData = new FormData();
       
       // Adicionar cada arquivo e seus metadados
-      files.forEach((file, index) => {
+      files.forEach((file) => {
+        if (!file) return;
+        
         formData.append("files", file);
         
-        // Adicionar metadados específicos para cada arquivo
+        // Pegar a ferramenta associada ao arquivo
+        const ferramenta = uploadData.metadata.fileAssociations[file.name];
+        
+        // Garantir que os metadados incluam cliente e ferramenta exatamente como mostrado no preview
         const metadata = {
           cliente: uploadData.metadata.cliente,
-          Ferramenta: uploadData.metadata.fileAssociations[file.name] || ""
+          Ferramenta: ferramenta,
+          tipo: "Documento",
+          // Adicionar outros metadados que possam ser necessários
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size
         };
         
-        formData.append(`metadata_${index}`, JSON.stringify(metadata));
+        // Adicionar metadados no formato que o Ragie espera
+        formData.append("metadata", JSON.stringify({
+          ...metadata,
+          // Garantir que os campos obrigatórios estejam presentes
+          cliente: metadata.cliente || "",
+          Ferramenta: metadata.Ferramenta || ""
+        }));
       });
 
-      // Enviar para o servidor
+      console.log("Enviando dados para o Ragie:", {
+        files: files.map(f => f.name),
+        metadata: formData.getAll("metadata").map(m => JSON.parse(m as string))
+      });
+
+      // Enviar para o servidor usando o endpoint correto do Ragie
       const response = await fetch("/api/documents/upload", {
         method: "POST",
         body: formData
       });
 
       if (!response.ok) {
-        throw new Error("Erro ao fazer upload");
+        const errorData = await response.json();
+        throw new Error(`Erro ao fazer upload: ${JSON.stringify(errorData)}`);
       }
 
       // Limpar dados do sessionStorage
@@ -149,7 +171,7 @@ export default function UploadEtapa3Page() {
       router.push("/gerenciador/upload_completo/4");
     } catch (error) {
       console.error("Erro ao fazer upload:", error);
-      alert("Erro ao fazer upload dos arquivos");
+      alert("Erro ao fazer upload dos arquivos. Verifique se todos os campos obrigatórios foram preenchidos.");
     } finally {
       setLoading(false);
     }
