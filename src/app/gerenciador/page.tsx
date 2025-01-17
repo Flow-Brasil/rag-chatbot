@@ -5,6 +5,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Download, Upload, Trash2, UsersIcon, UploadIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { Checkbox } from "@nextui-org/react";
+import { ClientSelector } from "../chat/clientes/_components/ClientSelector";
 
 // Função para formatar data de forma consistente
 function formatDate(dateString: string) {
@@ -30,10 +32,35 @@ export default function GerenciadorPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
+  const [selectedClient, setSelectedClient] = useState<string | null>(null);
+  const [inputValue, setInputValue] = useState("");
+  const [clientes, setClientes] = useState<{ id: string; name: string; documentCount: number }[]>([]);
+  const [loadingClientes, setLoadingClientes] = useState(true);
 
   useEffect(() => {
     fetchDocuments();
+    fetchClientes();
   }, []);
+
+  async function fetchClientes() {
+    try {
+      setLoadingClientes(true);
+      const response = await fetch("/api/clientes");
+      if (!response.ok) throw new Error("Erro ao carregar clientes");
+      const data = await response.json();
+      const clientesWithIds = (data.clientes || []).map((cliente: any) => ({
+        ...cliente,
+        id: cliente.name
+      }));
+      setClientes(clientesWithIds);
+    } catch (err) {
+      console.error("Erro ao carregar clientes:", err);
+      setClientes([]);
+    } finally {
+      setLoadingClientes(false);
+    }
+  }
 
   async function fetchDocuments() {
     try {
@@ -95,6 +122,43 @@ export default function GerenciadorPage() {
     }
   };
 
+  const handleSelectAll = () => {
+    if (selectedDocs.length === filteredDocuments.length) {
+      setSelectedDocs([]);
+    } else {
+      setSelectedDocs(filteredDocuments.map(doc => doc.id));
+    }
+  };
+
+  const handleSelectDoc = (docId: string) => {
+    setSelectedDocs(prev => 
+      prev.includes(docId) 
+        ? prev.filter(id => id !== docId)
+        : [...prev, docId]
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    try {
+      await Promise.all(
+        selectedDocs.map(docId =>
+          fetch(`/api/documents/${docId}`, {
+            method: "DELETE"
+          })
+        )
+      );
+      await fetchDocuments();
+      setSelectedDocs([]);
+    } catch (err) {
+      console.error("Erro ao deletar documentos:", err);
+      alert("Erro ao deletar documentos");
+    }
+  };
+
+  const filteredDocuments = documents.filter(doc => 
+    !selectedClient || doc.metadata?.cliente === selectedClient
+  );
+
   if (loading) {
     return <div className="container mx-auto p-4">Carregando documentos...</div>;
   }
@@ -105,34 +169,79 @@ export default function GerenciadorPage() {
 
   return (
     <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col gap-4 mb-8">
         <h1 className="text-2xl font-bold">Gerenciador de Documentos</h1>
+        
+        <div className="flex items-center gap-4">
+          <div className="w-[300px]">
+            <ClientSelector
+              clientes={clientes}
+              selectedCliente={selectedClient}
+              inputValue={inputValue}
+              onClientSelect={(clientName) => setSelectedClient(clientName)}
+              onInputChange={setInputValue}
+              onCreateNewClient={(clientName) => {
+                router.push(`/gerenciador/upload?cliente=${encodeURIComponent(clientName)}`);
+              }}
+              isLoading={loadingClientes}
+            />
+          </div>
+          
+          {filteredDocuments.length > 0 && (
+            <div className="flex items-center gap-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSelectAll}
+              >
+                {selectedDocs.length === filteredDocuments.length ? "Desmarcar Todos" : "Selecionar Todos"}
+              </Button>
+              
+              {selectedDocs.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBulkDelete}
+                  className="bg-red-500 text-white hover:bg-red-600"
+                >
+                  Deletar Selecionados ({selectedDocs.length})
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {documents.map((doc) => (
+        {filteredDocuments.map((doc) => (
           <Card key={doc.id} className="p-4">
             <div className="flex justify-between items-start mb-4">
-              <div>
-                <h3 className="font-semibold">{doc.name}</h3>
-                <p className="text-sm text-gray-600">
-                  Criado em: {formatDate(doc.created_at)}
-                </p>
-                {doc.metadata?.scope && (
+              <div className="flex gap-2">
+                <Checkbox
+                  isSelected={selectedDocs.includes(doc.id)}
+                  onValueChange={() => handleSelectDoc(doc.id)}
+                />
+                <div>
+                  <h3 className="font-semibold">{doc.name}</h3>
                   <p className="text-sm text-gray-600">
-                    Escopo: {doc.metadata.scope}
+                    Criado em: {formatDate(doc.created_at)}
                   </p>
-                )}
-                {doc.metadata?.tipo && (
-                  <p className="text-sm text-gray-600">
-                    Tipo: {doc.metadata.tipo}
-                  </p>
-                )}
-                {doc.metadata?.cliente && (
-                  <p className="text-sm text-gray-600">
-                    Cliente: {doc.metadata.cliente}
-                  </p>
-                )}
+                  {doc.metadata?.scope && (
+                    <p className="text-sm text-gray-600">
+                      Escopo: {doc.metadata.scope}
+                    </p>
+                  )}
+                  {doc.metadata?.tipo && (
+                    <p className="text-sm text-gray-600">
+                      Tipo: {doc.metadata.tipo}
+                    </p>
+                  )}
+                  {doc.metadata?.cliente && (
+                    <p className="text-sm text-gray-600">
+                      Cliente: {doc.metadata.cliente}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
             <div className="flex gap-2">

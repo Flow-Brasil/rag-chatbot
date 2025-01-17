@@ -277,7 +277,7 @@ export default function ChatClientesPage() {
       <div className="flex items-center mb-8">
         <Button 
           variant="ghost" 
-          onClick={() => router.push("/chat")}
+          onClick={() => router.push("/chat/geral")}
           className="mr-4"
         >
           <ArrowLeftIcon className="w-4 h-4 mr-2" />
