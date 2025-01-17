@@ -2,7 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface Document {
   id: string;
@@ -59,69 +67,62 @@ export function EditDocumentModal({
     await onSave(document.id, updates);
   };
 
-  if (!isOpen || !document) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <Card className="w-full max-w-md p-6 bg-white">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold">Editar Documento</h2>
-          <Button variant="ghost" onClick={onClose}>×</Button>
-        </div>
+    <Dialog open={isOpen && !!document} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Editar Documento</DialogTitle>
+        </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Nome do arquivo
-            </label>
-            <input
+          <div className="space-y-2">
+            <Label htmlFor="fileName">Nome do arquivo</Label>
+            <Input
+              id="fileName"
               type="text"
               value={fileName}
               onChange={(e) => setFileName(e.target.value)}
-              className="w-full border rounded-md p-2"
               required
+              aria-label="Nome do arquivo"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Escopo
-            </label>
-            <input
+          <div className="space-y-2">
+            <Label htmlFor="scope">Escopo</Label>
+            <Input
+              id="scope"
               type="text"
               value={scope}
               onChange={(e) => setScope(e.target.value)}
-              className="w-full border rounded-md p-2"
               placeholder="Ex: documentos, manuais, etc"
+              aria-label="Escopo do documento"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Tipo
-            </label>
-            <input
+          <div className="space-y-2">
+            <Label htmlFor="tipo">Tipo</Label>
+            <Input
+              id="tipo"
               type="text"
               value={tipo}
               onChange={(e) => setTipo(e.target.value)}
-              className="w-full border rounded-md p-2"
               placeholder="Ex: manual, relatório, etc"
+              aria-label="Tipo do documento"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Autor
-            </label>
-            <input
+          <div className="space-y-2">
+            <Label htmlFor="autor">Autor</Label>
+            <Input
+              id="autor"
               type="text"
               value={autor}
               onChange={(e) => setAutor(e.target.value)}
-              className="w-full border rounded-md p-2"
+              aria-label="Autor do documento"
             />
           </div>
 
-          <div className="flex justify-end gap-2 mt-6">
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button
               type="button"
               variant="ghost"
@@ -136,9 +137,9 @@ export function EditDocumentModal({
             >
               {saving ? "Salvando..." : "Salvar"}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
-      </Card>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 } 

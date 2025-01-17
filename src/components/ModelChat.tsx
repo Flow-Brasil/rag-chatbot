@@ -1,6 +1,12 @@
+"use client";
+
 import { useState, useCallback } from 'react';
-import { useModelChat } from '@/hooks/useModelChat';
-import { useRagieCommands } from '@/hooks/useRagieCommands';
+import { useModelChat } from '@/app/chat/geral/_hooks/useModelChat';
+import { useRagieCommands } from '@/app/chat/upload_customizado/_hooks/useRagieCommands';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 interface ModelChatProps {
   modelType?: string;
@@ -35,53 +41,54 @@ export default function ModelChat({ modelType = 'gemini' }: ModelChatProps) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4" role="log" aria-live="polite">
         {messages.map((message) => (
-          <div
+          <Card
             key={message.id}
-            className={`p-4 rounded-lg ${
+            className={cn(
+              "p-4",
               message.role === 'user' 
-                ? 'bg-blue-100 ml-auto max-w-[80%]' 
+                ? 'ml-auto max-w-[80%] bg-primary/10' 
                 : message.error 
-                  ? 'bg-red-50 border border-red-200 mr-auto max-w-[80%] text-red-700'
-                  : 'bg-gray-100 mr-auto max-w-[80%]'
-            }`}
+                  ? 'mr-auto max-w-[80%] bg-destructive/10 text-destructive'
+                  : 'mr-auto max-w-[80%] bg-muted'
+            )}
           >
             <p className="whitespace-pre-wrap">{message.content}</p>
-          </div>
+          </Card>
         ))}
         {(isLoading || isProcessing) && (
-          <div className="bg-gray-100 p-4 rounded-lg mr-auto max-w-[80%]">
+          <Card className="bg-muted p-4 mr-auto max-w-[80%]">
             <p>Processando...</p>
-          </div>
+          </Card>
         )}
       </div>
 
       <form onSubmit={handleSubmit} className="p-4 border-t">
         <div className="flex gap-2">
-          <input
+          <Input
             type="text"
             value={input}
             onChange={handleInputChange}
             placeholder="Digite sua mensagem..."
-            className="flex-1 p-2 border rounded-lg"
             disabled={isLoading || isProcessing}
+            aria-label="Mensagem"
           />
-          <button
+          <Button
             type="submit"
             disabled={isLoading || isProcessing || !input.trim()}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg disabled:opacity-50"
+            variant="default"
           >
             Enviar
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={clearMessages}
             disabled={isLoading || isProcessing}
-            className="px-4 py-2 bg-gray-500 text-white rounded-lg disabled:opacity-50"
+            variant="secondary"
           >
             Limpar
-          </button>
+          </Button>
         </div>
       </form>
     </div>

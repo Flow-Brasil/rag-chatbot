@@ -4,23 +4,28 @@ import { ragieClient } from "@/lib/ragie";
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
-    const file = formData.get("file") as File;
+    const files = formData.getAll("files") as File[];
     const metadataStr = formData.get("metadata") as string;
-    const metadata = JSON.parse(metadataStr);
+    const metadata = metadataStr ? JSON.parse(metadataStr) : {};
 
-    if (!file) {
+    if (!files || files.length === 0) {
       return NextResponse.json(
-        { error: "No file provided" },
+        { error: "Nenhum arquivo fornecido" },
         { status: 400 }
       );
     }
 
-    const document = await ragieClient.uploadDocument(file, metadata);
-    return NextResponse.json(document);
+    // Upload de múltiplos arquivos em paralelo
+    const uploadPromises = files.map(file => 
+      ragieClient.uploadDocument(file, metadata)
+    );
+
+    const documents = await Promise.all(uploadPromises);
+    return NextResponse.json({ documents });
   } catch (error) {
-    console.error("Error uploading document:", error);
+    console.error("Erro ao fazer upload dos documentos:", error);
     return NextResponse.json(
-      { error: "Failed to upload document" },
+      { error: "Falha ao fazer upload dos documentos" },
       { status: 500 }
     );
   }

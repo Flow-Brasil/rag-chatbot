@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Trash2, UsersIcon, UploadIcon } from "lucide-react";
+import { Download, Upload, Trash2, UsersIcon, UploadIcon, CalendarIcon, FilterIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { Checkbox } from "@nextui-org/react";
-import { ClientSelector } from "../chat/clientes/_components/ClientSelector";
+import { Checkbox, Select, SelectItem } from "@nextui-org/react";
+import { IntelligentSelector } from "@/components/selectors/IntelligentSelector";
+import { MetadataEditor } from "@/components/selectors/MetadataEditor";
+import type { Cliente } from "@/lib/api/clientes";
 
 // Função para formatar data de forma consistente
 function formatDate(dateString: string) {
@@ -23,6 +25,7 @@ interface Document {
     scope?: string;
     tipo?: string;
     cliente?: string;
+    [key: string]: any;
   };
   created_at: string;
 }
@@ -35,32 +38,40 @@ export default function GerenciadorPage() {
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
-  const [clientes, setClientes] = useState<{ id: string; name: string; documentCount: number }[]>([]);
+  const [clientes, setClientes] = useState<{ name: string; documentCount: number }[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
+  
+  // Estado para filtros de metadados
+  const [metadataFilters, setMetadataFilters] = useState<{ [key: string]: string }>({});
 
-  useEffect(() => {
-    fetchDocuments();
-    fetchClientes();
-  }, []);
-
-  async function fetchClientes() {
+  // Função para carregar clientes
+  const fetchClientes = useCallback(async () => {
     try {
       setLoadingClientes(true);
       const response = await fetch("/api/clientes");
       if (!response.ok) throw new Error("Erro ao carregar clientes");
       const data = await response.json();
-      const clientesWithIds = (data.clientes || []).map((cliente: any) => ({
-        ...cliente,
-        id: cliente.name
-      }));
-      setClientes(clientesWithIds);
+      setClientes(data.clientes || []);
     } catch (err) {
       console.error("Erro ao carregar clientes:", err);
       setClientes([]);
+      setError("Erro ao carregar lista de clientes");
     } finally {
       setLoadingClientes(false);
     }
-  }
+  }, []);
+
+  // Carregar documentos e clientes ao montar o componente
+  useEffect(() => {
+    Promise.all([
+      fetchDocuments(),
+      fetchClientes()
+    ]).catch(err => {
+      console.error("Erro ao carregar dados:", err);
+      setError("Erro ao carregar dados");
+    });
+  }, [fetchClientes]);
 
   async function fetchDocuments() {
     try {
@@ -155,9 +166,22 @@ export default function GerenciadorPage() {
     }
   };
 
-  const filteredDocuments = documents.filter(doc => 
-    !selectedClient || doc.metadata?.cliente === selectedClient
-  );
+  // Função para filtrar documentos
+  const filteredDocuments = documents.filter(doc => {
+    // Filtro por cliente
+    if (selectedClient && (!doc.metadata?.cliente || doc.metadata.cliente !== selectedClient)) {
+      return false;
+    }
+
+    // Filtro por metadados
+    for (const [key, value] of Object.entries(metadataFilters)) {
+      if (!doc.metadata || doc.metadata[key] !== value) {
+        return false;
+      }
+    }
+
+    return true;
+  });
 
   if (loading) {
     return <div className="container mx-auto p-4">Carregando documentos...</div>;
@@ -169,102 +193,134 @@ export default function GerenciadorPage() {
 
   return (
     <div className="container mx-auto p-4">
-      <div className="flex flex-col gap-4 mb-8">
+      <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Gerenciador de Documentos</h1>
-        
-        <div className="flex items-center gap-4">
-          <div className="w-[300px]">
-            <ClientSelector
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            <FilterIcon className="w-4 h-4 mr-2" />
+            {showFilters ? "Ocultar Filtros" : "Mostrar Filtros"}
+          </Button>
+          <Button
+            onClick={() => router.push("/gerenciador/upload")}
+          >
+            <UploadIcon className="w-4 h-4 mr-2" />
+            Upload
+          </Button>
+        </div>
+      </div>
+
+      <Card className="p-4 mb-6">
+        <div className="space-y-4">
+          {/* Seletor de Cliente */}
+          <div>
+            <label className="block text-sm font-medium mb-2">Cliente</label>
+            <IntelligentSelector
               clientes={clientes}
               selectedCliente={selectedClient}
-              inputValue={inputValue}
-              onClientSelect={(clientName) => setSelectedClient(clientName)}
+              onClientSelect={setSelectedClient}
               onInputChange={setInputValue}
-              onCreateNewClient={(clientName) => {
-                router.push(`/gerenciador/upload?cliente=${encodeURIComponent(clientName)}`);
-              }}
               isLoading={loadingClientes}
+              placeholder="Selecione um cliente para filtrar"
             />
           </div>
-          
-          {filteredDocuments.length > 0 && (
-            <div className="flex items-center gap-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSelectAll}
-              >
-                {selectedDocs.length === filteredDocuments.length ? "Desmarcar Todos" : "Selecionar Todos"}
-              </Button>
-              
+
+          {/* Área de Filtros de Metadados */}
+          {showFilters && (
+            <div className="mt-4">
+              <label className="block text-sm font-medium mb-2">Filtros de Metadados</label>
+              <MetadataEditor
+                metadata={metadataFilters}
+                onChange={setMetadataFilters}
+              />
+            </div>
+          )}
+
+          {/* Botões de Ação */}
+          <div className="flex justify-between items-center">
+            <div className="flex gap-2">
               {selectedDocs.length > 0 && (
                 <Button
                   variant="outline"
-                  size="sm"
                   onClick={handleBulkDelete}
-                  className="bg-red-500 text-white hover:bg-red-600"
+                  className="text-red-500 hover:text-red-700"
                 >
+                  <Trash2 className="w-4 h-4 mr-2" />
                   Deletar Selecionados ({selectedDocs.length})
                 </Button>
               )}
             </div>
-          )}
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {filteredDocuments.map((doc) => (
-          <Card key={doc.id} className="p-4">
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex gap-2">
-                <Checkbox
-                  isSelected={selectedDocs.includes(doc.id)}
-                  onValueChange={() => handleSelectDoc(doc.id)}
-                />
-                <div>
-                  <h3 className="font-semibold">{doc.name}</h3>
-                  <p className="text-sm text-gray-600">
-                    Criado em: {formatDate(doc.created_at)}
-                  </p>
-                  {doc.metadata?.scope && (
-                    <p className="text-sm text-gray-600">
-                      Escopo: {doc.metadata.scope}
-                    </p>
-                  )}
-                  {doc.metadata?.tipo && (
-                    <p className="text-sm text-gray-600">
-                      Tipo: {doc.metadata.tipo}
-                    </p>
-                  )}
-                  {doc.metadata?.cliente && (
-                    <p className="text-sm text-gray-600">
-                      Cliente: {doc.metadata.cliente}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleDownload(doc.id, doc.name)}
-                className="flex-1"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Baixar
-              </Button>
+            {Object.keys(metadataFilters).length > 0 && (
               <Button
                 variant="ghost"
-                size="sm"
-                onClick={() => handleDelete(doc.id)}
-                className="text-red-500 hover:text-red-700 hover:bg-red-100"
+                onClick={() => setMetadataFilters({})}
               >
-                <Trash2 className="w-4 h-4" />
+                Limpar Filtros
               </Button>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {/* Lista de Documentos */}
+      <div className="space-y-4">
+        {/* Cabeçalho da Lista */}
+        <div className="flex items-center gap-4 p-2 bg-gray-50 rounded">
+          <Checkbox
+            isSelected={selectedDocs.length === filteredDocuments.length && filteredDocuments.length > 0}
+            isIndeterminate={selectedDocs.length > 0 && selectedDocs.length < filteredDocuments.length}
+            onValueChange={handleSelectAll}
+          />
+          <div className="flex-1 grid grid-cols-5 gap-4">
+            <span className="font-medium">Nome</span>
+            <span className="font-medium">Cliente</span>
+            <span className="font-medium">Status</span>
+            <span className="font-medium">Data</span>
+            <span className="font-medium">Ações</span>
+          </div>
+        </div>
+
+        {/* Lista de Documentos */}
+        {filteredDocuments.map(doc => (
+          <div key={doc.id} className="flex items-center gap-4 p-2 hover:bg-gray-50 rounded">
+            <Checkbox
+              isSelected={selectedDocs.includes(doc.id)}
+              onValueChange={() => handleSelectDoc(doc.id)}
+            />
+            <div className="flex-1 grid grid-cols-5 gap-4">
+              <span className="truncate">{doc.name}</span>
+              <span className="truncate">{doc.metadata?.cliente || "-"}</span>
+              <span>{doc.status}</span>
+              <span>{formatDate(doc.created_at)}</span>
+              <div className="flex gap-2">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => handleDownload(doc.id, doc.name)}
+                >
+                  <Download className="w-4 h-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => handleDelete(doc.id)}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
-          </Card>
+          </div>
         ))}
+
+        {/* Mensagem quando não há documentos */}
+        {filteredDocuments.length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            Nenhum documento encontrado
+            {Object.keys(metadataFilters).length > 0 && " com os filtros selecionados"}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from "react";
-import { Input } from "@nextui-org/react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { CheckIcon } from "lucide-react";
 import type { FileNameSelectorProps } from "./types";
 
@@ -48,18 +49,27 @@ export function FileNameSelector({
       <h3 className="text-lg font-semibold mb-4">Nome do Arquivo</h3>
       
       <div className="space-y-2">
-        <Input
-          type="text"
-          label={label}
-          placeholder={placeholder}
-          value={value}
-          onChange={(e) => handleNameChange(e.target.value)}
-          errorMessage={error}
-          isInvalid={!!error}
-          isDisabled={isLoading}
-        />
+        <div className="space-y-1">
+          <Label htmlFor="fileName">{label}</Label>
+          <Input
+            id="fileName"
+            type="text"
+            placeholder={placeholder}
+            value={value}
+            onChange={(e) => handleNameChange(e.target.value)}
+            aria-invalid={!!error}
+            aria-describedby={error ? "fileName-error" : undefined}
+            disabled={isLoading}
+            className={error ? "border-destructive" : undefined}
+          />
+          {error && (
+            <p id="fileName-error" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+        </div>
         
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted-foreground">
           Nome sugerido: {suggestedName}
         </p>
       </div>
@@ -68,7 +78,7 @@ export function FileNameSelector({
         <Button
           onClick={onConfirm}
           disabled={!!error || !value.trim() || isLoading}
-          className="bg-blue-500 hover:bg-blue-600 text-white"
+          aria-label="Confirmar nome do arquivo"
         >
           <CheckIcon className="w-4 h-4 mr-2" />
           Confirmar

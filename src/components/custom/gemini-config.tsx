@@ -1,7 +1,9 @@
 "use client";
 
 import { Edit2 } from "lucide-react";
-import { useModelSelection } from "@/hooks/useModelSelection";
+import { useModelSelection } from "@/app/chat/geral/_hooks/useModelSelection";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export function GeminiConfig() {
   const {
@@ -14,31 +16,34 @@ export function GeminiConfig() {
 
   return (
     <div className="flex items-center space-x-2">
-      <button
+      <Button
         type="button"
         onClick={toggleGeminiEdit}
-        className="p-2 rounded-lg bg-gray-200 hover:bg-gray-300"
-        title="Editar chave API"
+        variant="ghost"
+        size="icon"
+        className="hover:bg-muted"
+        aria-label="Editar chave API"
       >
         <Edit2 className="w-4 h-4" />
-      </button>
+      </Button>
       
       {showGeminiEdit && (
         <div className="flex items-center space-x-2">
-          <input
+          <Input
             type="password"
             value={geminiKey}
             onChange={(e) => handleGeminiKeyChange(e.target.value)}
             placeholder="Insira sua chave API Gemini"
-            className="px-4 py-2 rounded-lg border"
+            aria-label="Chave API Gemini"
           />
-          <button
+          <Button
             type="button"
             onClick={handleGeminiKeyConfirm}
-            className="rounded-md bg-green-500 px-4 py-2 text-white hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500"
+            variant="default"
+            className="bg-green-500 hover:bg-green-600"
           >
             Salvar
-          </button>
+          </Button>
         </div>
       )}
     </div>

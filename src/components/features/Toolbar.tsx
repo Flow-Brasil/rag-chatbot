@@ -1,12 +1,37 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Button, Tooltip, Input, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from '@nextui-org/react';
 import { Eye, EyeOff, Key, Trash2, FileText } from 'lucide-react';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 export function Toolbar() {
-  const { isOpen, onOpen, onClose } = useDisclosure();
+  const [isOpen, setIsOpen] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -21,17 +46,15 @@ export function Toolbar() {
     try {
       localStorage.setItem('ragie_api_key', apiKey);
       toast.success('API key salva com sucesso!');
-      onClose();
+      setIsOpen(false);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleClearHistory = () => {
-    if (window.confirm('Tem certeza que deseja limpar todo o histórico?')) {
-      localStorage.removeItem('chat_messages');
-      toast.success('Histórico limpo com sucesso!');
-    }
+    localStorage.removeItem('chat_messages');
+    toast.success('Histórico limpo com sucesso!');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -42,71 +65,110 @@ export function Toolbar() {
 
   return (
     <div className="flex gap-2">
-      <Tooltip content="Configurar API Key">
-        <Button
-          aria-label="Configurar API Key"
-          isIconOnly
-          onClick={onOpen}
-          variant="light"
-        >
-          <Key className="h-4 w-4" />
-        </Button>
-      </Tooltip>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsOpen(true)}
+              aria-label="Configurar API Key"
+            >
+              <Key className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Configurar API Key</p>
+          </TooltipContent>
+        </Tooltip>
 
-      <Tooltip content="Limpar Histórico">
-        <Button
-          aria-label="Limpar Histórico"
-          isIconOnly
-          onClick={handleClearHistory}
-          variant="light"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </Tooltip>
-
-      <Tooltip content="Documentação">
-        <Button
-          aria-label="Documentação"
-          isIconOnly
-          onClick={() => window.open('/docs', '_blank')}
-          variant="light"
-        >
-          <FileText className="h-4 w-4" />
-        </Button>
-      </Tooltip>
-
-      <Modal isOpen={isOpen} onClose={onClose}>
-        <ModalContent>
-          <ModalHeader>Configurar API Key</ModalHeader>
-          <ModalBody>
-            <Input
-              type={showPassword ? 'text' : 'password'}
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              onKeyDown={handleKeyDown}
-              label="API Key"
-              endContent={
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
                 <Button
-                  isIconOnly
-                  variant="light"
-                  aria-label="Toggle password visibility"
-                  onClick={() => setShowPassword(!showPassword)}
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Limpar Histórico"
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  <Trash2 className="h-4 w-4" />
                 </Button>
-              }
-            />
-          </ModalBody>
-          <ModalFooter>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Limpar Histórico</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Tem certeza que deseja limpar todo o histórico? Esta ação não pode ser desfeita.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearHistory}>
+                    Confirmar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Limpar Histórico</p>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => window.open('/docs', '_blank')}
+              aria-label="Documentação"
+            >
+              <FileText className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Documentação</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Configurar API Key</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="relative">
+              <Input
+                type={showPassword ? 'text' : 'password'}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Insira sua API Key"
+                aria-label="API Key"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-2 top-1/2 -translate-y-1/2"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+          <DialogFooter>
             <Button
               onClick={handleSaveApiKey}
               disabled={isLoading}
             >
               {isLoading ? 'Salvando...' : 'Salvar'}
             </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 

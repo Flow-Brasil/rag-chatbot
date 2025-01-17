@@ -1,10 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card } from "./ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "./ui/card";
 import { Button } from "./ui/button";
 import { useRouter } from "next/navigation";
-import { Trash2 } from "lucide-react";
+import { Trash2, Loader2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface Document {
   id: string;
@@ -43,10 +55,6 @@ export function DocumentList() {
   }, []);
 
   const handleDelete = async (documentId: string) => {
-    if (!confirm("Tem certeza que deseja deletar este documento?")) {
-      return;
-    }
-
     setDeleting(documentId);
     try {
       const response = await fetch(`/api/documents/${documentId}`, {
@@ -57,7 +65,6 @@ export function DocumentList() {
         throw new Error("Erro ao deletar documento");
       }
 
-      // Atualiza a lista após deletar
       await fetchDocuments();
     } catch (err) {
       console.error("Erro ao deletar:", err);
@@ -68,42 +75,87 @@ export function DocumentList() {
   };
 
   if (loading) {
-    return <div>Carregando documentos...</div>;
+    return (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3" role="status" aria-label="Carregando documentos">
+        {[...Array(6)].map((_, i) => (
+          <Card key={i} className="p-4">
+            <CardHeader>
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-3 w-1/2 mt-2" />
+            </CardHeader>
+            <CardFooter>
+              <Skeleton className="h-10 w-full" />
+            </CardFooter>
+          </Card>
+        ))}
+      </div>
+    );
   }
 
   if (error) {
-    return <div>Erro: {error}</div>;
+    return (
+      <div role="alert" className="p-4 bg-destructive/10 text-destructive rounded-md">
+        Erro: {error}
+      </div>
+    );
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3" role="list">
       {documents.map((doc) => (
-        <Card key={doc.id} className="p-4">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <h3 className="font-semibold">{doc.name}</h3>
-              {doc.metadata?.scope && (
-                <div>
-                  <p className="text-sm text-gray-600">Escopo: {doc.metadata.scope}</p>
-                </div>
-              )}
+        <Card key={doc.id} className="p-4" role="listitem">
+          <CardHeader className="pb-2">
+            <div className="flex justify-between items-start">
+              <div>
+                <CardTitle className="text-lg">{doc.name}</CardTitle>
+                {doc.metadata?.scope && (
+                  <CardDescription>
+                    Escopo: {doc.metadata.scope}
+                  </CardDescription>
+                )}
+              </div>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    disabled={deleting === doc.id}
+                    aria-label={`Deletar documento ${doc.name}`}
+                  >
+                    {deleting === doc.id ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-5 w-5" />
+                    )}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Deletar documento</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Tem certeza que deseja deletar este documento? Esta ação não pode ser desfeita.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => handleDelete(doc.id)}>
+                      Confirmar
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-red-500 hover:text-red-700 hover:bg-red-100"
-              onClick={() => handleDelete(doc.id)}
-              disabled={deleting === doc.id}
+          </CardHeader>
+          <CardFooter className="pt-4">
+            <Button 
+              onClick={() => router.push(`/chat/${doc.id}`)}
+              className="w-full"
+              aria-label={`Conversar sobre o documento ${doc.name}`}
             >
-              <Trash2 className="h-5 w-5" />
+              Conversar sobre este documento
             </Button>
-          </div>
-          <Button 
-            onClick={() => router.push(`/chat/${doc.id}`)}
-            className="w-full"
-          >
-            Conversar sobre este documento
-          </Button>
+          </CardFooter>
         </Card>
       ))}
     </div>

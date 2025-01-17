@@ -74,20 +74,17 @@ export default function UploadPage() {
 
     setUploading(true);
     try {
-      // Upload cada arquivo sequencialmente
-      for (const file of selectedFiles) {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("metadata", JSON.stringify(metadata));
+      const formData = new FormData();
+      selectedFiles.forEach(file => formData.append("files", file));
+      formData.append("metadata", JSON.stringify(metadata));
 
-        const response = await fetch("/api/documents/upload", {
-          method: "POST",
-          body: formData
-        });
+      const response = await fetch("/api/documents/upload", {
+        method: "POST",
+        body: formData
+      });
 
-        if (!response.ok) {
-          throw new Error(`Erro ao fazer upload do arquivo ${file.name}`);
-        }
+      if (!response.ok) {
+        throw new Error("Erro ao fazer upload dos arquivos");
       }
 
       router.push("/gerenciador");

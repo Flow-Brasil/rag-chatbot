@@ -3,7 +3,16 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Upload } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Upload, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -55,97 +64,92 @@ export function UploadModal({ isOpen, onClose, onUpload, uploading }: UploadModa
     setAutor("");
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <Card className="w-full max-w-md p-6 bg-white">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold">Upload de Documento</h2>
-          <Button variant="ghost" onClick={onClose}>×</Button>
-        </div>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Upload de Documento</DialogTitle>
+        </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Arquivo
-            </label>
+          <div className="space-y-2">
+            <Label htmlFor="modal-file-upload">Arquivo</Label>
             <div className="flex items-center gap-2">
-              <input
+              <Input
                 type="file"
                 onChange={handleFileSelect}
                 className="hidden"
                 id="modal-file-upload"
+                aria-label="Selecionar arquivo para upload"
               />
-              <label
-                htmlFor="modal-file-upload"
-                className="flex-1 cursor-pointer border rounded-md p-2 hover:bg-gray-50"
-              >
-                {selectedFile ? selectedFile.name : "Selecionar arquivo"}
-              </label>
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
+                className="flex-1 h-auto py-2 justify-start font-normal"
                 onClick={() => document.getElementById("modal-file-upload")?.click()}
+              >
+                {selectedFile ? selectedFile.name : "Selecionar arquivo"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => document.getElementById("modal-file-upload")?.click()}
+                aria-label="Selecionar arquivo"
               >
                 <Upload className="w-4 h-4" />
               </Button>
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Nome do arquivo
-            </label>
-            <input
+          <div className="space-y-2">
+            <Label htmlFor="fileName">Nome do arquivo</Label>
+            <Input
+              id="fileName"
               type="text"
               value={fileName}
               onChange={(e) => setFileName(e.target.value)}
-              className="w-full border rounded-md p-2"
               required
+              aria-label="Nome do arquivo"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Escopo
-            </label>
-            <input
+          <div className="space-y-2">
+            <Label htmlFor="scope">Escopo</Label>
+            <Input
+              id="scope"
               type="text"
               value={scope}
               onChange={(e) => setScope(e.target.value)}
-              className="w-full border rounded-md p-2"
               placeholder="Ex: documentos, manuais, etc"
+              aria-label="Escopo do documento"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Tipo
-            </label>
-            <input
+          <div className="space-y-2">
+            <Label htmlFor="tipo">Tipo</Label>
+            <Input
+              id="tipo"
               type="text"
               value={tipo}
               onChange={(e) => setTipo(e.target.value)}
-              className="w-full border rounded-md p-2"
               placeholder="Ex: manual, relatório, etc"
+              aria-label="Tipo do documento"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Autor
-            </label>
-            <input
+          <div className="space-y-2">
+            <Label htmlFor="autor">Autor</Label>
+            <Input
+              id="autor"
               type="text"
               value={autor}
               onChange={(e) => setAutor(e.target.value)}
-              className="w-full border rounded-md p-2"
+              aria-label="Autor do documento"
             />
           </div>
 
-          <div className="flex justify-end gap-2 mt-6">
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button
               type="button"
               variant="ghost"
@@ -160,9 +164,9 @@ export function UploadModal({ isOpen, onClose, onUpload, uploading }: UploadModa
             >
               {uploading ? "Enviando..." : "Upload"}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
-      </Card>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 } 

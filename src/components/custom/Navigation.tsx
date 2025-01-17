@@ -28,11 +28,11 @@ export default function Navigation() {
           Chat Clientes
         </Link>
         <Link
-          href="/gerenciador/clientes"
-          className={`flex items-center px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isActive('/gerenciador/clientes')}`}
+          href="/gerenciador"
+          className={`flex items-center px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isActive('/gerenciador')}`}
         >
-          <span className="material-icons mr-2">people</span>
-          Clientes
+          <span className="material-icons mr-2">folder</span>
+          Gerenciador
         </Link>
         <Link
           href="/gerenciador/upload"
