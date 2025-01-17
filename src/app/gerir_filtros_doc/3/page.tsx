@@ -7,8 +7,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import Link from "next/link";
-import { Plus, Minus, Search } from "lucide-react";
-import { IntelligentSelector } from "@/components/selectors/IntelligentSelector";
+import { Plus, Minus, Search, X } from "lucide-react";
+import { MetadataSelector } from "@/components/selectors/MetadataSelector";
 
 interface EditData {
   isNew: boolean;
@@ -68,7 +68,7 @@ export default function GerirFiltrosEtapa3Page() {
   const [loading, setLoading] = useState(false);
   const [testando, setTestando] = useState(false);
   const [resultadoTeste, setResultadoTeste] = useState<ResultadoTeste | null>(null);
-  const [camposDisponiveis, setCamposDisponiveis] = useState<Campo[]>([]);
+  const [camposDisponiveis, setCamposDisponiveis] = useState<string[]>([]);
   const [valoresDisponiveis, setValoresDisponiveis] = useState<Map<string, Set<string>>>(new Map());
   const [valoresCount, setValoresCount] = useState<Map<string, Map<string, number>>>(new Map());
 
@@ -116,10 +116,7 @@ export default function GerirFiltrosEtapa3Page() {
       });
 
       // Converter para o formato esperado
-      setCamposDisponiveis(Array.from(camposMap.entries()).map(([campo, count]) => ({
-        name: campo,
-        documentCount: count
-      })));
+      setCamposDisponiveis(Array.from(camposMap.keys()));
     } catch (error) {
       console.error("Erro ao carregar campos:", error);
     }
@@ -350,58 +347,49 @@ export default function GerirFiltrosEtapa3Page() {
 
             <div className="space-y-4">
               {regras.map((regra, index) => (
-                <div key={index} className="flex gap-4 items-start">
+                <div key={index} className="flex items-center gap-4">
                   <div className="flex-1">
-                    <IntelligentSelector
-                      clientes={camposDisponiveis.map(campo => ({
-                        name: campo.name,
-                        documentCount: campo.documentCount
-                      }))}
-                      selectedCliente={regra.campo}
-                      onClientSelect={(value: string | null) => atualizarRegra(index, "campo", value || "")}
-                      onInputChange={(value: string) => atualizarRegra(index, "campo", value)}
-                      placeholder="Campo (ex: tipo, categoria)"
+                    <MetadataSelector
+                      items={camposDisponiveis}
+                      selectedItem={regra.campo || ""}
+                      onSelect={(value) => atualizarRegra(index, "campo", value)}
+                      placeholder="Selecione o campo"
+                      createNewMessage="Novo Campo"
                     />
                   </div>
                   <div className="w-48">
                     <select
-                      value={regra.operador}
+                      value={regra.operador || ""}
                       onChange={(e) => atualizarRegra(index, "operador", e.target.value)}
                       className="w-full px-3 py-2 border rounded-md"
-                      required
                     >
-                      {OPERADORES.map(op => (
-                        <option key={op.value} value={op.value}>
-                          {op.icon} {op.label}
-                        </option>
-                      ))}
+                      <option value="">Selecione o operador</option>
+                      <option value="contains">Contém</option>
+                      <option value="equals">Igual a</option>
+                      <option value="not_equals">Diferente de</option>
+                      <option value="starts_with">Começa com</option>
+                      <option value="ends_with">Termina com</option>
+                      <option value="is_empty">Está vazio</option>
+                      <option value="is_not_empty">Não está vazio</option>
                     </select>
                   </div>
                   <div className="flex-1">
-                    {regra.operador !== "vazio" && regra.operador !== "nao_vazio" && (
-                      <IntelligentSelector
-                        clientes={Array.from(valoresDisponiveis.get(regra.campo) || []).map(valor => ({
-                          name: valor,
-                          documentCount: valoresCount.get(regra.campo)?.get(valor) || 0
-                        }))}
-                        selectedCliente={regra.valor}
-                        onClientSelect={(value: string | null) => atualizarRegra(index, "valor", value || "")}
-                        onInputChange={(value: string) => atualizarRegra(index, "valor", value)}
-                        placeholder="Valor"
-                      />
-                    )}
+                    <MetadataSelector
+                      items={Array.from(valoresDisponiveis.get(regra.campo || "") || [])}
+                      selectedItem={regra.valor || ""}
+                      onSelect={(value) => atualizarRegra(index, "valor", value)}
+                      placeholder="Selecione ou digite o valor"
+                      createNewMessage="Novo Valor"
+                    />
                   </div>
-                  {regras.length > 1 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removerRegra(index)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Minus className="w-4 h-4" />
-                    </Button>
-                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removerRegra(index)}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
                 </div>
               ))}
             </div>

@@ -95,7 +95,7 @@ export default function UploadEtapa1Page() {
       sessionStorage.setItem('uploadFiles', JSON.stringify(filesData));
 
       // Redirecionar para etapa 2
-      router.push("/gerenciador/upload_completo/2" as any);
+      router.push("/gerenciador/upload_completo/2");
     } catch (err) {
       console.error("Erro ao processar dados:", err);
       alert("Erro ao processar os dados");
@@ -123,26 +123,17 @@ export default function UploadEtapa1Page() {
 
       {/* Navegação entre etapas */}
       <div className="flex items-center justify-center gap-2 mb-8">
-        <Button
-          variant="default"
-          className="w-24"
-        >
+        <Button variant="default" className="w-24">
           Etapa 1
         </Button>
-        <Link href="/gerenciador/upload_completo/2" className="w-24">
-          <Button
-            variant="outline"
-            className="w-full"
-          >
-            Etapa 2
-          </Button>
-        </Link>
-        <Button
-          variant="outline"
-          className="w-24"
-          disabled
-        >
+        <Button variant="outline" className="w-24" disabled>
+          Etapa 2
+        </Button>
+        <Button variant="outline" className="w-24" disabled>
           Etapa 3
+        </Button>
+        <Button variant="outline" className="w-24" disabled>
+          Etapa 4
         </Button>
       </div>
 
@@ -155,6 +146,26 @@ export default function UploadEtapa1Page() {
 
       <Card className="p-6">
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Campo de seleção de cliente com IntelligentSelector */}
+          <div>
+            <label className="block text-sm font-medium mb-2">Cliente</label>
+            <IntelligentSelector
+              clientes={clientes}
+              selectedCliente={metadata.cliente}
+              onClientSelect={(value) => {
+                setMetadata(prev => ({ ...prev, cliente: value || "" }));
+                // Se um cliente foi selecionado e há arquivos, submeter o formulário
+                if (value && selectedFiles.length > 0) {
+                  const form = document.querySelector('form');
+                  form?.requestSubmit();
+                }
+              }}
+              onInputChange={(value) => {
+                setMetadata(prev => ({ ...prev, cliente: value }));
+              }}
+            />
+          </div>
+
           {/* Área de seleção de arquivo */}
           <div>
             <label className="block text-sm font-medium mb-2">Arquivos</label>
@@ -204,21 +215,6 @@ export default function UploadEtapa1Page() {
                 ))}
               </div>
             )}
-          </div>
-
-          {/* Campo de seleção de cliente com IntelligentSelector */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Cliente</label>
-            <IntelligentSelector
-              clientes={clientes}
-              selectedCliente={metadata.cliente}
-              onClientSelect={(value) => {
-                setMetadata(prev => ({ ...prev, cliente: value || "" }));
-              }}
-              onInputChange={(value) => {
-                setMetadata(prev => ({ ...prev, cliente: value }));
-              }}
-            />
           </div>
 
           {/* Botão de envio */}

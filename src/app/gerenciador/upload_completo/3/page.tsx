@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { FileIcon, X } from "lucide-react";
+import { FileIcon } from "lucide-react";
 import Link from "next/link";
 
 interface Document {
@@ -17,116 +17,139 @@ interface Document {
   };
 }
 
+interface FileWithMetadata {
+  name: string;
+  size: number;
+  type: string;
+  metadata: {
+    Ferramenta: string;
+    [key: string]: string;
+  };
+}
+
 interface UploadData {
   files: Array<{name: string; type: string; size: number}>;
   metadata: {
     cliente: string;
-    Ferramenta?: string;
-    [key: string]: string | undefined;
+    fileAssociations: Record<string, string>;
+    tools: Array<{name: string; files: string[]}>;
+    [key: string]: any;
   };
 }
 
 export default function UploadEtapa3Page() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [uploadData, setUploadData] = useState<any>(null);
+  const [uploadData, setUploadData] = useState<UploadData | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [associatedDocs, setAssociatedDocs] = useState<Document[]>([]);
+  const [filesWithMetadata, setFilesWithMetadata] = useState<FileWithMetadata[]>([]);
 
   useEffect(() => {
     // Recuperar dados do sessionStorage
     const storedData = sessionStorage.getItem('uploadData');
-    if (storedData) {
-      const parsedData = JSON.parse(storedData);
-      setUploadData(parsedData);
-      
-      // Buscar documentos associados à ferramenta
-      if (parsedData.metadata.Ferramenta) {
-        fetchAssociatedDocs(parsedData.metadata.cliente, parsedData.metadata.Ferramenta);
-      }
+    const storedFiles = sessionStorage.getItem('uploadFiles');
+    
+    if (!storedData || !storedFiles) {
+      router.push("/gerenciador/upload_completo/1");
+      return;
     }
 
-    // Recuperar arquivos do sessionStorage
-    const storedFiles = sessionStorage.getItem('uploadFiles');
-    if (storedFiles) {
+    try {
+      const parsedData = JSON.parse(storedData) as UploadData;
       const filesData = JSON.parse(storedFiles);
-      // Converter os dados dos arquivos de volta para objetos File
+      
+      // Reconstruir os arquivos
       const reconstructedFiles = filesData.map((fileData: any) => {
         return new File(
-          [new Uint8Array(fileData.content)], 
+          [new Uint8Array(fileData.content)],
           fileData.name,
-          { 
+          {
             type: fileData.type,
             lastModified: fileData.lastModified
           }
         );
       });
-      setFiles(reconstructedFiles);
-    }
-  }, []);
 
-  const fetchAssociatedDocs = async (cliente: string, ferramenta: string) => {
-    try {
-      const response = await fetch("/api/documents");
-      if (!response.ok) throw new Error("Erro ao carregar documentos");
-      const data = await response.json();
-      
-      // Filtrar documentos pelo cliente e ferramenta
-      const docs = data.documents.filter((doc: Document) => 
-        doc.metadata?.cliente === cliente && 
-        doc.metadata?.Ferramenta === ferramenta
-      );
-      
-      setAssociatedDocs(docs);
+      // Criar array de arquivos com metadados
+      const processedFiles = reconstructedFiles.map((file: File) => {
+        const toolName = parsedData.metadata.fileAssociations[file.name] || "";
+        return {
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          metadata: {
+            Ferramenta: toolName
+          }
+        };
+      });
+
+      setUploadData(parsedData);
+      setFiles(reconstructedFiles);
+      setFilesWithMetadata(processedFiles);
+
+      // Buscar documentos associados se houver ferramenta
+      if (parsedData.metadata.tools && parsedData.metadata.tools.length > 0) {
+        fetchAssociatedDocs(parsedData.metadata.cliente);
+      }
     } catch (error) {
-      console.error("Erro ao carregar documentos associados:", error);
+      console.error("Erro ao carregar dados:", error);
+      router.push("/gerenciador/upload_completo/1");
+    }
+  }, [router]);
+
+  const fetchAssociatedDocs = async (cliente: string) => {
+    try {
+      const response = await fetch(`/api/documents?cliente=${encodeURIComponent(cliente)}`);
+      if (!response.ok) throw new Error("Erro ao buscar documentos");
+      const data = await response.json();
+      setAssociatedDocs(data.documents || []);
+    } catch (error) {
+      console.error("Erro ao buscar documentos:", error);
     }
   };
 
   const handleSubmit = async () => {
-    if (!uploadData || files.length === 0) return;
+    if (!uploadData || !files.length) return;
 
     try {
       setLoading(true);
       
-      // Preparar os dados para upload
+      // Criar FormData com os arquivos e metadados
       const formData = new FormData();
       
-      // Adicionar cada arquivo com seu próprio metadata
+      // Adicionar cada arquivo e seus metadados
       files.forEach((file, index) => {
         formData.append("files", file);
         
-        // Encontrar os metadados específicos deste arquivo
-        const fileMetadata = uploadData.filesWithMetadata?.find(
-          (f: any) => f.name === file.name
-        )?.metadata || uploadData.metadata;
+        // Adicionar metadados específicos para cada arquivo
+        const metadata = {
+          cliente: uploadData.metadata.cliente,
+          Ferramenta: uploadData.metadata.fileAssociations[file.name] || ""
+        };
         
-        // Adicionar metadata para cada arquivo
-        formData.append(
-          `metadata_${index}`,
-          JSON.stringify(fileMetadata)
-        );
+        formData.append(`metadata_${index}`, JSON.stringify(metadata));
       });
 
+      // Enviar para o servidor
       const response = await fetch("/api/documents/upload", {
         method: "POST",
         body: formData
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`Erro ao fazer upload: ${JSON.stringify(error)}`);
+        throw new Error("Erro ao fazer upload");
       }
 
-      // Limpar dados do storage
+      // Limpar dados do sessionStorage
       sessionStorage.removeItem('uploadData');
       sessionStorage.removeItem('uploadFiles');
-      
-      // Redirecionar para etapa 4 (processamento)
-      router.push("/gerenciador/upload_completo/4" as any);
-    } catch (err) {
-      console.error("Erro no upload:", err);
-      alert(err instanceof Error ? err.message : "Erro ao fazer upload dos arquivos");
+
+      // Redirecionar para a página de processamento
+      router.push("/gerenciador/upload_completo/4");
+    } catch (error) {
+      console.error("Erro ao fazer upload:", error);
+      alert("Erro ao fazer upload dos arquivos");
     } finally {
       setLoading(false);
     }
@@ -175,14 +198,14 @@ export default function UploadEtapa3Page() {
           <div>
             <h2 className="text-lg font-semibold mb-4">Arquivos e Associações</h2>
             <div className="space-y-4">
-              {uploadData.filesWithMetadata?.map((fileData: any, index: number) => (
+              {filesWithMetadata.map((fileData, index) => (
                 <div key={index} className="bg-white border rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <FileIcon className="w-5 h-5 text-gray-500" />
                       <span className="font-medium">{fileData.name}</span>
                       <span className="text-sm text-gray-500">
-                        ({(files[index]?.size ? (files[index].size / 1024).toFixed(2) : '0')} KB)
+                        ({(fileData.size / 1024).toFixed(2)} KB)
                       </span>
                     </div>
                   </div>
@@ -203,14 +226,17 @@ export default function UploadEtapa3Page() {
           <div>
             <h2 className="text-lg font-semibold mb-4">Metadados Comuns</h2>
             <div className="grid grid-cols-2 gap-4">
-              {Object.entries(uploadData.metadata || {}).map(([key, value]) => (
-                key !== 'fileAssociations' && (
-                  <div key={key} className="bg-gray-50 p-2 rounded">
-                    <span className="text-sm font-medium">{key}: </span>
-                    <span className="text-sm">{value as string}</span>
-                  </div>
-                )
-              ))}
+              {Object.entries(uploadData.metadata).map(([key, value]) => {
+                if (key !== 'fileAssociations' && key !== 'tools' && typeof value === 'string') {
+                  return (
+                    <div key={key} className="bg-gray-50 p-2 rounded">
+                      <span className="text-sm font-medium">{key}: </span>
+                      <span className="text-sm">{value}</span>
+                    </div>
+                  );
+                }
+                return null;
+              })}
             </div>
           </div>
 

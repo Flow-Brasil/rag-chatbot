@@ -5,166 +5,218 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import Link from "next/link";
-import { IntelligentSelector } from "@/components/selectors/IntelligentSelector";
-import { ChevronDown, ChevronUp, FileText, Plus, X } from "lucide-react";
+import { ToolList } from "@/components/selectors/ToolList";
+import { ToolSelector } from "@/components/selectors/ToolSelector";
+import { useTools } from "@/hooks/useTools";
 
 interface UploadData {
-  files: Array<{
-    name: string;
-    type: string;
-    size: number;
-  }>;
-  metadata: Record<string, string>;
+  files: File[];
+  metadata: {
+    cliente: string;
+    fileAssociations?: Record<string, string>;
+    [key: string]: any;
+  };
 }
 
-interface FileAssociation {
-  fileName: string;
-  tools: string[];
-}
-
-interface ToolAssociation {
+interface ExistingTool {
   name: string;
   files: string[];
-  isExpanded?: boolean;
 }
 
 export default function UploadEtapa2Page() {
   const router = useRouter();
   const [uploadData, setUploadData] = useState<UploadData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [tools, setTools] = useState<ToolAssociation[]>([]);
-  const [availableFiles, setAvailableFiles] = useState<string[]>([]);
   const [newToolName, setNewToolName] = useState("");
+  const [clientName, setClientName] = useState<string | null>(null);
+  const [dataInitialized, setDataInitialized] = useState(false);
+  
+  const {
+    tools,
+    availableFiles,
+    addTool,
+    toggleToolExpansion,
+    addFileToTool,
+    removeFileFromTool,
+    selectAllAvailableFiles,
+    removeAllFiles,
+    updateToolSearchTerm,
+    setInitialFiles,
+    setTools
+  } = useTools();
 
   // Carregar dados do upload
   useEffect(() => {
-    const savedData = sessionStorage.getItem('uploadData');
-    if (!savedData) {
-      router.push("/gerenciador/upload_completo/1");
-      return;
-    }
+    if (dataInitialized) return;
 
-    try {
-      const data = JSON.parse(savedData);
-      setUploadData(data);
-      setAvailableFiles(data.files.map((f: any) => f.name));
+    const loadData = () => {
+      const savedData = sessionStorage.getItem('uploadData');
+      const savedFiles = sessionStorage.getItem('uploadFiles');
       
-      // Buscar ferramentas existentes
-      fetchExistingTools();
-    } catch (err) {
-      console.error("Erro ao carregar dados:", err);
-      router.push("/gerenciador/upload_completo/1");
-    }
-  }, [router]);
-
-  // Função para buscar ferramentas existentes
-  const fetchExistingTools = async () => {
-    try {
-      const response = await fetch("/api/documents");
-      if (!response.ok) throw new Error("Erro ao carregar documentos");
-      const data = await response.json();
-      
-      // Extrair ferramentas únicas dos documentos
-      const toolsSet = new Set<string>();
-      data.documents.forEach((doc: any) => {
-        if (doc.metadata?.Ferramenta) {
-          toolsSet.add(doc.metadata.Ferramenta);
-        }
-      });
-      
-      // Converter para o formato de ToolAssociation
-      const existingTools = Array.from(toolsSet).map(name => ({
-        name,
-        files: [],
-        isExpanded: false
-      }));
-      
-      setTools(existingTools);
-    } catch (err) {
-      console.error("Erro ao carregar ferramentas:", err);
-      // Em caso de erro, usar algumas ferramentas padrão
-      const defaultTools = ["BDE"].map(name => ({
-        name,
-        files: [],
-        isExpanded: false
-      }));
-      setTools(defaultTools);
-    }
-  };
-
-  const toggleToolExpansion = (toolIndex: number) => {
-    setTools(prev => prev.map((tool, i) => 
-      i === toolIndex ? { ...tool, isExpanded: !tool.isExpanded } : tool
-    ));
-  };
-
-  const addFileToTool = (fileName: string, toolIndex: number) => {
-    setTools(prev => prev.map((tool, i) => {
-      if (i === toolIndex) {
-        return { ...tool, files: [...tool.files, fileName] };
+      if (!savedData || !savedFiles) {
+        router.push("/gerenciador/upload_completo/1");
+        return;
       }
-      return tool;
-    }));
-    setAvailableFiles(prev => prev.filter(f => f !== fileName));
-  };
 
-  const removeFileFromTool = (fileName: string, toolIndex: number) => {
-    setTools(prev => prev.map((tool, i) => {
-      if (i === toolIndex) {
-        return { ...tool, files: tool.files.filter(f => f !== fileName) };
+      try {
+        const data = JSON.parse(savedData);
+        const filesData = JSON.parse(savedFiles);
+        
+        // Reconstruir os objetos File
+        const reconstructedFiles = filesData.map((fileData: any) => {
+          const uint8Array = new Uint8Array(fileData.content);
+          const blob = new Blob([uint8Array], { type: fileData.type });
+          return new File([blob], fileData.name, {
+            type: fileData.type,
+            lastModified: fileData.lastModified
+          });
+        });
+        
+        // Reconstruir o uploadData com os arquivos reconstruídos
+        const reconstructedUploadData = {
+          ...data,
+          files: reconstructedFiles
+        };
+        
+        // Definir arquivos disponíveis (que ainda não foram associados)
+        const associatedFiles = new Set(
+          Object.keys(data.metadata?.fileAssociations || {})
+        );
+        
+        setInitialFiles(
+          reconstructedFiles
+            .map((f: File) => f.name)
+            .filter((name: string) => !associatedFiles.has(name))
+        );
+        
+        // Inicializar ferramentas com as associações existentes
+        const existingTools = (data.metadata?.tools || []) as ExistingTool[];
+        setTools(existingTools.map((tool) => ({
+          name: tool.name,
+          files: tool.files || [],
+          isExpanded: false
+        })));
+
+        setUploadData(reconstructedUploadData);
+        setClientName(data.metadata.cliente);
+        setDataInitialized(true);
+        
+      } catch (err) {
+        console.error("Erro ao carregar dados:", err);
+        router.push("/gerenciador/upload_completo/1");
       }
-      return tool;
-    }));
-    setAvailableFiles(prev => [...prev, fileName]);
-  };
+    };
 
-  const addNewTool = () => {
-    if (!newToolName.trim()) return;
-    setTools(prev => [...prev, { name: newToolName, files: [], isExpanded: true }]);
-    setNewToolName("");
-  };
+    loadData();
+  }, [router, setInitialFiles, setTools, dataInitialized]);
 
-  const handleSubmit = async () => {
+  // Efeito separado para buscar ferramentas existentes
+  useEffect(() => {
+    if (!clientName || !dataInitialized) return;
+
+    const fetchExistingTools = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch(`/api/documents?cliente=${encodeURIComponent(clientName)}`);
+        if (!response.ok) throw new Error("Erro ao buscar documentos");
+        
+        const data = await response.json();
+        const uniqueTools = new Set<string>();
+        
+        // Extrair ferramentas únicas dos documentos
+        data.documents.forEach((doc: any) => {
+          if (doc.metadata?.['Ferramenta'] && doc.metadata['Ferramenta'].trim()) {
+            uniqueTools.add(doc.metadata['Ferramenta']);
+          }
+        });
+        
+        // Converter ferramentas únicas em array de ToolAssociation
+        const toolAssociations = Array.from(uniqueTools).map(name => ({
+          name,
+          files: [],
+          isExpanded: false
+        }));
+        
+        setTools(prev => {
+          // Manter apenas as ferramentas que já têm arquivos associados
+          const existingToolsWithFiles = prev.filter(tool => tool.files.length > 0);
+          // Adicionar novas ferramentas que não existem ainda
+          const newTools = toolAssociations.filter(
+            newTool => !existingToolsWithFiles.some(existing => existing.name === newTool.name)
+          );
+          return [...existingToolsWithFiles, ...newTools];
+        });
+      } catch (error) {
+        console.error("Erro ao buscar ferramentas:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchExistingTools();
+  }, [clientName, dataInitialized, setTools]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!uploadData) return;
 
-    try {
-      setLoading(true);
+    // Criar objeto simplificado de associações
+    const fileAssociations: Record<string, string> = {};
+    tools.forEach(tool => {
+      tool.files.forEach(fileName => {
+        fileAssociations[fileName] = tool.name;
+      });
+    });
 
-      // Preparar metadados com as associações
-      const updatedMetadata = {
+    // Criar objeto simplificado de ferramentas
+    const simplifiedTools = tools.map(t => ({
+      name: t.name,
+      files: t.files
+    }));
+
+    // Atualizar uploadData com as associações simplificadas
+    const updatedData = {
+      ...uploadData,
+      metadata: {
         ...uploadData.metadata,
-        fileAssociations: tools.reduce((acc, tool) => {
-          tool.files.forEach(fileName => {
-            acc[fileName] = tool.name;
-          });
-          return acc;
-        }, {} as Record<string, string>)
+        fileAssociations,
+        tools: simplifiedTools
+      }
+    };
+
+    try {
+      // Salvar apenas os dados necessários no sessionStorage
+      const storageData = {
+        files: uploadData.files.map(f => ({
+          name: f.name,
+          type: f.type,
+          size: f.size,
+          lastModified: f.lastModified
+        })),
+        metadata: updatedData.metadata
       };
-
-      // Preparar arquivos com metadados
-      const filesWithMetadata = uploadData.files.map(file => ({
-        ...file,
-        metadata: {
-          cliente: uploadData.metadata['cliente'],
-          tipo: "documento",
-          Ferramenta: updatedMetadata.fileAssociations[file.name] || ""
-        }
+      
+      sessionStorage.setItem('uploadData', JSON.stringify(storageData));
+      
+      // Processar arquivos binários separadamente
+      const filesData = await Promise.all(uploadData.files.map(async file => {
+        const arrayBuffer = await file.arrayBuffer();
+        return {
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          lastModified: file.lastModified,
+          content: Array.from(new Uint8Array(arrayBuffer))
+        };
       }));
-
-      // Atualizar uploadData com as associações
-      sessionStorage.setItem('uploadData', JSON.stringify({
-        ...uploadData,
-        metadata: updatedMetadata,
-        filesWithMetadata
-      }));
-
-      // Redirecionar para etapa 3
-      router.push("/gerenciador/upload_completo/3");
-    } catch (err) {
-      console.error("Erro ao processar associações:", err);
-      alert("Erro ao processar as associações");
-    } finally {
-      setLoading(false);
+      
+      sessionStorage.setItem('uploadFiles', JSON.stringify(filesData));
+      
+      // Avançar para a próxima etapa
+      router.push('/gerenciador/upload_completo/3');
+    } catch (error) {
+      console.error("Erro ao processar dados:", error);
+      alert("Erro ao processar os dados. Por favor, tente novamente.");
     }
   };
 
@@ -175,7 +227,7 @@ export default function UploadEtapa2Page() {
   const hasAssociations = tools.some(tool => tool.files.length > 0);
 
   return (
-    <div className="container mx-auto p-4 max-w-4xl">
+    <div className="container mx-auto p-4 max-w-5xl">
       {/* Navegação entre etapas */}
       <div className="flex items-center justify-center gap-2 mb-8">
         <Link href="/gerenciador/upload_completo/1" className="w-24">
@@ -200,111 +252,42 @@ export default function UploadEtapa2Page() {
       <Card className="p-6">
         <div className="space-y-6">
           {/* Lista de Ferramentas */}
-          <div className="space-y-4">
-            {tools.map((tool, toolIndex) => (
-              <div key={tool.name} className="border rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => toggleToolExpansion(toolIndex)}
-                      className="p-1"
-                    >
-                      {tool.isExpanded ? (
-                        <ChevronUp className="w-4 h-4" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4" />
-                      )}
-                    </Button>
-                    <h3 className="font-medium">{tool.name}</h3>
-                    <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                      {tool.files.length} arquivos
-                    </span>
-                  </div>
-                </div>
+          <ToolList
+            tools={tools}
+            availableFiles={availableFiles}
+            onToggleExpand={toggleToolExpansion}
+            onAddFile={addFileToTool}
+            onRemoveFile={removeFileFromTool}
+            onSelectAll={selectAllAvailableFiles}
+            onRemoveAll={removeAllFiles}
+            onUpdateSearch={updateToolSearchTerm}
+            onRemoveFileCompletely={(fileName) => {
+              // Remover o arquivo de todas as ferramentas
+              setTools(prev => prev.map(tool => ({
+                ...tool,
+                files: tool.files.filter(f => f !== fileName)
+              })));
+              
+              // Atualizar uploadData removendo o arquivo
+              if (uploadData) {
+                const updatedFiles = uploadData.files.filter(f => f.name !== fileName);
+                const updatedUploadData = {
+                  ...uploadData,
+                  files: updatedFiles
+                };
+                setUploadData(updatedUploadData);
+                sessionStorage.setItem('uploadData', JSON.stringify(updatedUploadData));
+              }
+            }}
+          />
 
-                {tool.isExpanded && (
-                  <div className="mt-4 space-y-4">
-                    {/* Arquivos Associados */}
-                    {tool.files.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-500 mb-2">
-                          Arquivos associados
-                        </h4>
-                        <div className="space-y-2">
-                          {tool.files.map(fileName => (
-                            <div
-                              key={fileName}
-                              className="flex items-center justify-between p-2 bg-gray-50 rounded"
-                            >
-                              <div className="flex items-center gap-2">
-                                <FileText className="w-4 h-4 text-gray-500" />
-                                <span className="text-sm">{fileName}</span>
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removeFileFromTool(fileName, toolIndex)}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                              >
-                                <X className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Arquivos Disponíveis */}
-                    {availableFiles.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-500 mb-2">
-                          Arquivos disponíveis
-                        </h4>
-                        <div className="space-y-2">
-                          {availableFiles.map(fileName => (
-                            <div
-                              key={fileName}
-                              className="flex items-center justify-between p-2 bg-gray-50 rounded"
-                            >
-                              <div className="flex items-center gap-2">
-                                <FileText className="w-4 h-4 text-gray-500" />
-                                <span className="text-sm">{fileName}</span>
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => addFileToTool(fileName, toolIndex)}
-                                className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                              >
-                                <Plus className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Adicionar Nova Ferramenta */}
-          <div className="flex gap-2">
-            <IntelligentSelector
-              clientes={[]}
-              selectedCliente={newToolName}
-              onClientSelect={(value) => setNewToolName(value || "")}
-              onInputChange={setNewToolName}
-              placeholder="Digite o nome da nova ferramenta..."
-            />
-            <Button onClick={addNewTool} disabled={!newToolName.trim()}>
-              <Plus className="w-4 h-4 mr-2" />
-              Adicionar
-            </Button>
-          </div>
+          {/* Seletor de Ferramentas */}
+          <ToolSelector
+            tools={tools}
+            newToolName={newToolName}
+            onToolNameChange={setNewToolName}
+            onAddTool={addTool}
+          />
 
           {/* Botões de Ação */}
           <div className="flex justify-end gap-4 pt-4">
@@ -316,7 +299,7 @@ export default function UploadEtapa2Page() {
               disabled={loading || !hasAssociations}
               className="gap-2"
             >
-              {loading ? "Processando..." : "Continuar"}
+              {loading ? "Carregando..." : "Continuar"}
             </Button>
           </div>
         </div>

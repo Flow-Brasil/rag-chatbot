@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Autocomplete, AutocompleteItem } from "@nextui-org/react";
+import type { Key } from "react";
 
 interface MetadataSelectorProps {
   items: string[];
@@ -26,11 +27,17 @@ export function MetadataSelector({
   emptyMessage = "Nenhum item encontrado",
   createNewMessage = "Novo item"
 }: MetadataSelectorProps) {
-  const [inputValue, setInputValue] = useState("");
+  const [inputValue, setInputValue] = useState(selectedItem || "");
 
   const handleInputChange = (value: string) => {
     setInputValue(value);
     onInputChange?.(value);
+  };
+
+  const handleSelectionChange = (key: Key | null) => {
+    if (key !== null && typeof key === 'string') {
+      onSelect(key);
+    }
   };
 
   const showNewItemBadge = inputValue && !items.includes(inputValue);
@@ -42,11 +49,7 @@ export function MetadataSelector({
       defaultItems={items.map(item => ({ value: item }))}
       value={selectedItem || ""}
       onInputChange={handleInputChange}
-      onSelectionChange={(value) => {
-        if (typeof value === 'string') {
-          onSelect(value);
-        }
-      }}
+      onSelectionChange={handleSelectionChange}
       className="w-full"
       isLoading={isLoading}
       isDisabled={disabled}
