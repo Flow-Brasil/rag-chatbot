@@ -7,23 +7,22 @@ interface Tool {
   files: string[];
   isExpanded: boolean;
   searchTerm?: string;
+  metadata: Record<string, string[]>;
 }
 
 export function useTools(initialTools: Tool[] = []) {
-  const [tools, setTools] = useState<Tool[]>(initialTools);
+  const [tools, setTools] = useState<Tool[]>([]);
   const [availableFiles, setAvailableFiles] = useState<string[]>([]);
 
-  const addTool = (name: string) => {
+  const addTool = (name: string, metadata: Record<string, string[]> = {}) => {
     if (!name.trim() || tools.some(t => t.name === name.trim())) return;
     
-    setTools(prev => [
-      ...prev,
-      {
-        name: name.trim(),
-        files: [],
-        isExpanded: true
-      }
-    ]);
+    setTools([{
+      name: name.trim(),
+      files: [],
+      isExpanded: true,
+      metadata
+    }]);
   };
 
   const toggleToolExpansion = (toolIndex: number) => {

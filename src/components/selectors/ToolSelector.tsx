@@ -3,18 +3,25 @@
 import { Button } from "@/components/ui/button";
 import { MetadataSelector } from "@/components/selectors/MetadataSelector";
 
+interface Tool {
+  name: string;
+  metadata: Record<string, string[]>;
+}
+
 interface ToolSelectorProps {
-  tools: { name: string }[];
+  tools: Tool[];
   newToolName: string;
   onToolNameChange: (value: string) => void;
-  onAddTool: (name: string) => void;
+  onAddTool: (name: string, metadata: Record<string, string[]>) => void;
+  availableMetadata?: Record<string, string[]>;
 }
 
 export function ToolSelector({
   tools,
   newToolName,
   onToolNameChange,
-  onAddTool
+  onAddTool,
+  availableMetadata = {}
 }: ToolSelectorProps) {
   return (
     <form 
@@ -22,18 +29,22 @@ export function ToolSelector({
       onSubmit={(e) => {
         e.preventDefault();
         if (newToolName.trim()) {
-          onAddTool(newToolName);
+          const selectedTool = tools.find(t => t.metadata['Ferramenta']?.includes(newToolName));
+          onAddTool(newToolName, selectedTool?.metadata || availableMetadata);
         }
       }}
     >
       <div className="flex-1">
         <MetadataSelector
-          items={tools.map(t => t.name)}
+          items={tools.map(t => t.metadata?.['Ferramenta']?.[0] || t.name || "").filter(Boolean)}
           selectedItem={newToolName}
           onSelect={(value) => {
             onToolNameChange(value);
-            if (value && !tools.some(t => t.name === value)) {
-              onAddTool(value);
+            if (value) {
+              const selectedTool = tools.find(t => 
+                (t.metadata?.['Ferramenta']?.[0] || t.name) === value
+              );
+              onAddTool(value, selectedTool?.metadata || availableMetadata);
             }
           }}
           onInputChange={onToolNameChange}

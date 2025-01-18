@@ -111,7 +111,7 @@ export default function UploadEtapa2_1Page() {
         const data = await response.json();
         const uniqueTools = new Set<string>();
         
-        // Extrair ferramentas únicas dos documentos
+        // Extrair ferramentas únicas dos documentos (apenas o nome)
         data.documents.forEach((doc: any) => {
           if (doc.metadata?.['Ferramenta'] && doc.metadata['Ferramenta'].trim()) {
             uniqueTools.add(doc.metadata['Ferramenta']);
@@ -120,9 +120,12 @@ export default function UploadEtapa2_1Page() {
         
         // Converter ferramentas únicas em array de ToolAssociation
         const toolAssociations = Array.from(uniqueTools).map(name => ({
-          name,
+          name: "", // Inicialmente vazio para forçar seleção
           files: [],
-          isExpanded: false
+          isExpanded: false,
+          metadata: {
+            Ferramenta: [name]
+          }
         }));
         
         setTools(toolAssociations);
@@ -229,11 +232,12 @@ export default function UploadEtapa2_1Page() {
               newToolName={newToolName}
               onToolNameChange={setNewToolName}
               onAddTool={addTool}
+              availableMetadata={tools[0]?.metadata || {}}
             />
           </div>
 
           {/* Lista de Arquivos */}
-          {tools.length > 0 && (
+          {tools.length > 0 && tools[0]?.name && tools[0].name.trim() !== "" && (
             <div className="mt-6">
               <h2 className="text-lg font-semibold mb-4">Associar Arquivos</h2>
               <div className="bg-gray-50 p-4 rounded-lg">

@@ -167,8 +167,8 @@ export default function UploadEtapa3Page() {
       sessionStorage.removeItem('uploadData');
       sessionStorage.removeItem('uploadFiles');
 
-      // Redirecionar para a página de processamento
-      router.push("/gerenciador/upload_completo/4");
+      // Redirecionar para a página inicial do gerenciador
+      router.push("/gerenciador");
     } catch (error) {
       console.error("Erro ao fazer upload:", error);
       alert("Erro ao fazer upload dos arquivos. Verifique se todos os campos obrigatórios foram preenchidos.");
@@ -202,9 +202,6 @@ export default function UploadEtapa3Page() {
           <Button variant="outline" className="w-full">Etapa 2</Button>
         </Link>
         <Button variant="default" className="w-24">Etapa 3</Button>
-        <Button variant="outline" className="w-24" disabled>
-          Etapa 4
-        </Button>
       </div>
 
       <div className="mb-8">
