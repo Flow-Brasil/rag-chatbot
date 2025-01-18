@@ -12,16 +12,10 @@ import { Input } from "@/components/ui/input";
 import { useChat } from "./_hooks/useChat";
 import { MetadataEditor } from "@/components/selectors/MetadataEditor";
 import type { Cliente } from "@/lib/api/clientes";
-
-interface Document {
-  id: string;
-  name: string;
-  metadata: {
-    cliente?: string;
-    [key: string]: any;
-  };
-  created_at: string;
-}
+import { metadataService } from "@/lib/services/metadata";
+import type { Document } from "../../../types/documents";
+import { MetadataClusters } from "@/components/metadata/MetadataClusters";
+import { DocumentList } from "./_components/DocumentList";
 
 interface Message {
   role: "user" | "assistant";
@@ -152,15 +146,7 @@ export default function ChatClientesPage() {
   };
 
   // Função para filtrar documentos
-  const filteredDocuments = clienteDocuments.filter(doc => {
-    // Filtro por metadados
-    for (const [key, value] of Object.entries(metadataFilters)) {
-      if (!doc.metadata || doc.metadata[key] !== value) {
-        return false;
-      }
-    }
-    return true;
-  });
+  const filteredDocuments = metadataService.filterDocuments(clienteDocuments, metadataFilters);
 
   // Efeito para pré-selecionar documentos filtrados
   useEffect(() => {
@@ -248,20 +234,20 @@ export default function ChatClientesPage() {
           {/* Área de Filtros de Metadados */}
           {showFilters && (
             <div>
-              <label className="block text-sm font-medium mb-2">Filtros de Metadados</label>
-              <MetadataEditor
-                metadata={metadataFilters}
-                onChange={setMetadataFilters}
+              <label className="block text-sm font-medium mb-2">Filtros</label>
+              <MetadataClusters
+                documents={clienteDocuments}
+                onFilterChange={(key, value) => {
+                  const newFilters = { ...metadataFilters };
+                  if (value) {
+                    newFilters[key] = value;
+                  } else {
+                    delete newFilters[key];
+                  }
+                  setMetadataFilters(newFilters);
+                }}
+                activeFilters={metadataFilters}
               />
-              {Object.keys(metadataFilters).length > 0 && (
-                <Button
-                  variant="ghost"
-                  onClick={() => setMetadataFilters({})}
-                  className="mt-2"
-                >
-                  Limpar Filtros
-                </Button>
-              )}
             </div>
           )}
         </div>
@@ -277,7 +263,7 @@ export default function ChatClientesPage() {
               {selectedDocuments.length} selecionado{selectedDocuments.length !== 1 ? 's' : ''}
             </span>
           </div>
-          
+
           <div className="flex-1 overflow-y-auto">
             <div className="space-y-2">
               {clienteDocuments.length === 0 ? (
@@ -289,25 +275,34 @@ export default function ChatClientesPage() {
                       : "Selecione um cliente para ver seus documentos"}
                 </div>
               ) : (
-                clienteDocuments.map((doc) => (
-                  <div
-                    key={doc.id}
-                    className={`p-2 rounded-lg flex items-start gap-2 hover:bg-gray-50 transition-colors ${
-                      selectedDocuments.some(d => d.id === doc.id) ? 'bg-blue-50' : ''
-                    }`}
-                  >
-                    <Checkbox
-                      isSelected={selectedDocuments.some(d => d.id === doc.id)}
-                      onValueChange={() => handleDocumentSelect(doc)}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{doc.name}</p>
-                      <p className="text-sm text-gray-500">
-                        {formatDate(doc.created_at)}
-                      </p>
-                    </div>
-                  </div>
-                ))
+                <DocumentList
+                  documents={filteredDocuments}
+                  selectedDocuments={selectedDocuments}
+                  isUploadMode={false}
+                  onDocumentSelect={handleDocumentSelect}
+                  onDeleteDocument={async (docId: string) => {
+                    try {
+                      const response = await fetch(`/api/documents/${docId}`, {
+                        method: "DELETE",
+                      });
+
+                      if (!response.ok) {
+                        throw new Error("Erro ao excluir documento");
+                      }
+
+                      // Atualiza a lista de documentos
+                      await loadClienteDocuments();
+
+                      // Remove o documento da seleção se estiver selecionado
+                      setSelectedDocuments(prev => prev.filter(doc => doc.id !== docId));
+
+                      return true;
+                    } catch (error) {
+                      console.error("Erro ao excluir documento:", error);
+                      return false;
+                    }
+                  }}
+                />
               )}
             </div>
           </div>
@@ -325,10 +320,10 @@ export default function ChatClientesPage() {
                   }`}
                 >
                   <div
-                    className={`max-w-[80%] rounded-lg p-3 ${
+                    className={`max-w-[80%] rounded-lg p-4 ${
                       message.role === "assistant"
                         ? "bg-gray-100"
-                        : "bg-blue-500 text-white"
+                        : "bg-blue-100"
                     }`}
                   >
                     <p className="whitespace-pre-wrap">{message.content}</p>
@@ -337,32 +332,24 @@ export default function ChatClientesPage() {
               ))}
               {loading && (
                 <div className="flex justify-start">
-                  <div className="max-w-[80%] rounded-lg p-3 bg-gray-100">
-                    <p>Digitando...</p>
+                  <div className="max-w-[80%] rounded-lg p-4 bg-gray-100">
+                    <p>Pensando...</p>
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Chat Input */}
           <form onSubmit={handleSubmit} className="flex gap-2">
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={
-                !selectedCliente
-                  ? "Selecione um cliente primeiro..."
-                  : selectedDocuments.length === 0
-                  ? "Selecione documentos para iniciar o chat..."
-                  : "Digite sua mensagem..."
-              }
-              disabled={!selectedCliente || selectedDocuments.length === 0}
-              className="flex-1"
+              placeholder="Digite sua mensagem..."
+              disabled={loading || selectedDocuments.length === 0}
             />
-            <Button 
-              type="submit" 
-              disabled={!input.trim() || !selectedCliente || selectedDocuments.length === 0}
+            <Button
+              type="submit"
+              disabled={loading || selectedDocuments.length === 0}
             >
               <MessageSquareIcon className="w-4 h-4" />
             </Button>
@@ -371,4 +358,4 @@ export default function ChatClientesPage() {
       </div>
     </div>
   );
-} 
+}

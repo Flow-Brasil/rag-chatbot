@@ -1,16 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-
-interface Document {
-  id: string;
-  name: string;
-  metadata: {
-    cliente?: string;
-    [key: string]: any;
-  };
-  created_at: string;
-}
+import type { Document } from "@/types/documents";
+import { metadataService } from "@/lib/services/metadata";
 
 interface Cliente {
   name: string;
@@ -30,18 +22,16 @@ export function useClientDocuments(selectedCliente: string | null) {
         const response = await fetch("/api/documents");
         if (response.ok) {
           const data = await response.json();
-          // Extrair clientes únicos dos documentos e contar documentos
-          const clientesMap = new Map<string, number>();
-          data.documents?.forEach((doc: Document) => {
-            if (doc.metadata?.cliente) {
-              clientesMap.set(doc.metadata.cliente, (clientesMap.get(doc.metadata.cliente) || 0) + 1);
-            }
-          });
+          // Extrair metadados usando o serviço
+          const metadata = metadataService.extractMetadataValues(data.documents);
+          const clientesSet = metadata['cliente'] || [];
           
-          // Converter para array de clientes com contagem
-          const clientesArray = Array.from(clientesMap.entries()).map(([name, count]) => ({
+          // Contar documentos por cliente
+          const clientesArray = clientesSet.map(name => ({
             name,
-            documentCount: count
+            documentCount: data.documents.filter(
+              (doc: Document) => doc.metadata['cliente']?.includes(name)
+            ).length
           }));
           
           setClientes(clientesArray);
@@ -65,9 +55,11 @@ export function useClientDocuments(selectedCliente: string | null) {
       const response = await fetch("/api/documents");
       if (response.ok) {
         const data = await response.json();
-        const docs = data.documents?.filter(
-          (doc: Document) => doc.metadata?.cliente === selectedCliente
-        ) || [];
+        // Filtrar documentos pelo cliente selecionado usando o serviço
+        const docs = metadataService.filterDocuments(
+          data.documents,
+          { cliente: selectedCliente }
+        );
         setDocuments(docs);
       }
     } catch (error) {
